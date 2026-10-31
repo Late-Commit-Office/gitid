@@ -8,7 +8,7 @@ use crate::style;
 use crate::EXIT_OK;
 
 pub fn run(git: &SystemGit, path: &Path, key: Option<&str>) -> Result<u8> {
-    let folder = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let folder = gitid_core::paths::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     if !folder.is_dir() {
         return Err(gitid_core::Error::NotADirectory(folder));
     }

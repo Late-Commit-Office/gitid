@@ -10,6 +10,7 @@ pub mod config;
 pub mod error;
 pub mod git;
 pub mod identity;
+pub mod paths;
 pub mod repo;
 pub mod secrets;
 

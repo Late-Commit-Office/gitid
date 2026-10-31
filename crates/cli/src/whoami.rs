@@ -8,7 +8,7 @@ use crate::style;
 use crate::{EXIT_OK, EXIT_PROBLEMS};
 
 pub fn run(git: &SystemGit, version: GitVersion, path: &Path) -> Result<u8> {
-    let folder = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let folder = gitid_core::paths::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let id = effective_identity(git, &folder)?;
 
     let repo = match &id.repo {

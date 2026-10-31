@@ -63,7 +63,11 @@ fn include_if_gitdir_applies_only_inside_its_folder() {
     );
     let work = t.mkdir("work");
     t.global_set(
-        &format!("includeIf.gitdir:{}.path", t.gitdir_pattern(&work)),
+        &format!(
+            "includeIf.{}{}.path",
+            t.gitdir_condition(),
+            t.gitdir_pattern(&work)
+        ),
         &work_cfg.to_string_lossy(),
     );
     let inside = t.init_repo("work/api");

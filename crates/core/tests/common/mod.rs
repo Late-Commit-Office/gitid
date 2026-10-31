@@ -46,9 +46,11 @@ impl TestEnv {
             .join("gitid-tests")
             .join(format!("{name}-{}-{n}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
-        // Canonicalize so includeIf "gitdir:" matches (macOS /var -> /private/var).
+        // Canonicalize so includeIf "gitdir:" matches (macOS /var -> /private/var,
+        // Windows 8.3 short names like RUNNER~1). Use the core helper, not std's,
+        // which returns \\?\C:\... paths on Windows that Git for Windows rejects.
         std::fs::create_dir_all(&root).unwrap();
-        let root = root.canonicalize().unwrap();
+        let root = gitid_core::paths::canonicalize(&root).unwrap();
         let home = root.join("home");
         std::fs::create_dir_all(&home).unwrap();
         let global = home.join(".gitconfig");
@@ -115,6 +117,15 @@ impl TestEnv {
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(&p, contents).unwrap();
         p
+    }
+
+    /// `gitdir/i:` on case-insensitive filesystems (Windows, macOS), else `gitdir:`.
+    pub fn gitdir_condition(&self) -> &'static str {
+        if cfg!(any(windows, target_os = "macos")) {
+            "gitdir/i:"
+        } else {
+            "gitdir:"
+        }
     }
 
     /// Path in the form includeIf expects: forward slashes, trailing slash.
