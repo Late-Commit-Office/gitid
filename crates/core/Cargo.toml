@@ -1,0 +1,10 @@
+[package]
+name = "gitid-core"
+description = "Find out which git identity applies to a folder, and why."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# No dependencies yet on purpose. serde (for Tauri / --json) arrives with step 3.
+[dependencies]
