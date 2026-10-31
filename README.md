@@ -1,4 +1,6 @@
-# git-identity
+> **Note:** This repository is mostly coded by an LLM (Claude), with direction and review by a human.
+
+# gitid
 
 See which git identity applies to any folder, and why, so commits never fall back to your OS login name again.
 
