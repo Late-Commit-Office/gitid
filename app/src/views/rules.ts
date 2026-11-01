@@ -173,7 +173,7 @@ export function mountRulesView(root: HTMLElement): void {
       el(
         "p",
         { class: "muted rule-file" },
-        r.managed ? "" : `${t("rules.handWritten")} `,
+        r.managed ? null : el("span", {}, t("rules.handWritten")),
         el("span", { class: "mono", title: r.file }, tilde(r.file)),
       ),
     );

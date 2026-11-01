@@ -174,6 +174,159 @@ mod tests {
         serde_json::to_value(e.into()).unwrap()
     }
 
+    /// One of every error the frontend can receive.
+    fn every_error() -> Vec<CommandError> {
+        let p = || std::path::PathBuf::from("/x");
+        let s = || "x".to_string();
+        let io = || std::io::Error::other("x");
+        let v = || GitVersion::new(2, 36, 0);
+        let invalid = vec![
+            Invalid::EmptyKey,
+            Invalid::BadKey {
+                key: s(),
+                detail: s(),
+            },
+            Invalid::PathNotUtf8 { path: p() },
+            Invalid::StaleValue,
+            Invalid::NeedsRepoFolder,
+            Invalid::UnknownSetting { key: s() },
+            Invalid::NotBool { key: s() },
+            Invalid::NotOneOf {
+                key: s(),
+                allowed: vec![],
+            },
+            Invalid::LineBreak { key: s() },
+            Invalid::NameAngleBrackets,
+            Invalid::BadEmail { email: s() },
+            Invalid::BadBranchName { name: s() },
+            Invalid::BadRuleId { id: s() },
+            Invalid::RuleNeedsIdentity,
+            Invalid::BadRuleName,
+            Invalid::RuleNeedsWhere,
+            Invalid::EmptyPattern,
+            Invalid::EmptyCondition,
+            Invalid::BadServer { input: s() },
+            Invalid::BadPort { input: s() },
+            Invalid::NoSuchRule {
+                id: s(),
+                known: vec![],
+            },
+            Invalid::NoHome,
+            Invalid::NotGit { path: p() },
+        ];
+        let mut errors = vec![
+            Error::NotARepository(p()),
+            Error::Unsupported {
+                feature: Feature::RemoteRules,
+                needs: v(),
+                have: v(),
+            },
+            Error::MultipleValues { key: s() },
+            Error::Io {
+                path: p(),
+                source: io(),
+            },
+            Error::GitNotFound { searched: vec![] },
+            Error::Spawn {
+                git: p(),
+                source: io(),
+            },
+            Error::GitFailed {
+                args: vec![],
+                code: None,
+                stderr: s(),
+            },
+            Error::Parse(s()),
+            Error::NotADirectory(p()),
+        ];
+        // Not a test of anything at run time: if a variant is added to
+        // Error or Invalid, this match stops compiling until it's listed
+        // above too, and so until the catalog test below covers it.
+        for e in &errors {
+            match e {
+                Error::NotARepository(_)
+                | Error::Unsupported { .. }
+                | Error::MultipleValues { .. }
+                | Error::Invalid(_)
+                | Error::Io { .. }
+                | Error::GitNotFound { .. }
+                | Error::Spawn { .. }
+                | Error::GitFailed { .. }
+                | Error::Parse(_)
+                | Error::NotADirectory(_) => {}
+            }
+        }
+        for i in &invalid {
+            match i {
+                Invalid::EmptyKey
+                | Invalid::BadKey { .. }
+                | Invalid::PathNotUtf8 { .. }
+                | Invalid::StaleValue
+                | Invalid::NeedsRepoFolder
+                | Invalid::UnknownSetting { .. }
+                | Invalid::NotBool { .. }
+                | Invalid::NotOneOf { .. }
+                | Invalid::LineBreak { .. }
+                | Invalid::NameAngleBrackets
+                | Invalid::BadEmail { .. }
+                | Invalid::BadBranchName { .. }
+                | Invalid::BadRuleId { .. }
+                | Invalid::RuleNeedsIdentity
+                | Invalid::BadRuleName
+                | Invalid::RuleNeedsWhere
+                | Invalid::EmptyPattern
+                | Invalid::EmptyCondition
+                | Invalid::BadServer { .. }
+                | Invalid::BadPort { .. }
+                | Invalid::NoSuchRule { .. }
+                | Invalid::NoHome
+                | Invalid::NotGit { .. } => {}
+            }
+        }
+        errors.extend(invalid.into_iter().map(Error::Invalid));
+        let mut out: Vec<CommandError> = errors.into_iter().map(Into::into).collect();
+        // The app's own.
+        out.push(CommandError::save_settings(io()));
+        out.push(CommandError::internal("x"));
+        out.push(CommandError::invalid(
+            "badLanguageTag",
+            json!({ "tag": "x" }),
+            s(),
+        ));
+        out
+    }
+
+    /// Every error code the backend can send has an English message, and
+    /// every placeholder in it is a param the backend actually sends.
+    #[test]
+    fn every_error_has_an_english_message() {
+        let en: Map<String, Value> =
+            serde_json::from_str(include_str!("../../src/locales/en.json")).unwrap();
+        for e in every_error() {
+            let key = format!("error.{}", e.code);
+            let Some(Value::String(text)) = en.get(&key) else {
+                panic!("src/locales/en.json has no \"{key}\" (for: {})", e.message);
+            };
+            for name in placeholders(text) {
+                assert!(
+                    e.params.contains_key(&name),
+                    "\"{key}\" uses {{{name}}}, which the backend doesn't send"
+                );
+            }
+        }
+        match Feature::RemoteRules {
+            Feature::RemoteRules => assert!(en.contains_key("feature.remoteRules")),
+        }
+    }
+
+    fn placeholders(text: &str) -> Vec<String> {
+        text.split('{')
+            .skip(1)
+            .filter_map(|rest| rest.split_once('}').map(|(name, _)| name.to_string()))
+            .filter(|name| !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric()))
+            .collect()
+    }
+
     #[test]
     fn invalid_input_becomes_code_and_params() {
         let v = json_of(Error::Invalid(Invalid::BadEmail {

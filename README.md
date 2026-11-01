@@ -83,7 +83,8 @@ crates/core    gitid-core: all logic, no UI
 crates/cli     gitid binary (clap)
 app/           desktop app frontend: plain TypeScript, built with Vite
   src/lib/     api.ts (typed calls to Rust), types.ts (the JSON shapes), i18n.ts (t(), plurals, language choice), messages.ts (words for errors, warnings, rules, settings), dom.ts, paths.ts, recent.ts
-  src/locales/ en.json (source and fallback), zh-Hans.json
+  src/locales/ en.json (source and fallback), zh-Hans.json; sources/ records the English each translation was made from
+  scripts/     find-literals.mjs (check:strings), check-locales.mjs (check:locales)
   src/views/   identity.ts, scan.ts, rules.ts, scopes.ts (All config), settings.ts
 app/src-tauri/ desktop app backend: commands.rs, rule_commands.rs, scope_commands.rs, scan_commands.rs (the only calls the UI can make), state.rs (which git and the language; saved settings.json), error.rs (errors as a code + values; the frontend words them)
 ```
@@ -93,6 +94,28 @@ The backend never sends the app a sentence to show: errors, warnings, rule descr
 The app's webview gets no plugin permissions: it can only call gitid's own commands, and even the folder picker is opened from Rust. Text from config is only ever inserted as text, never as HTML.
 
 The rule: every read and write goes through the `git` executable. Config files are never parsed or written directly. (gitid only creates the identities folder, and deletes identity files it created itself.)
+
+## Localisation
+
+The app is in English and Simplified Chinese. It follows the system language (Simplified Chinese for zh, zh-CN, zh-SG, zh-Hans; English otherwise), and Settings > Language overrides it. The CLI is English only.
+
+- **Text lives in `app/src/locales/`**: `en.json` is the source and the fallback, `zh-Hans.json` the translation. Code never contains text a person reads: it calls `t("key")`, `tn("key", count)` for plurals (`key.one` / `key.other`) or `tx("key", { name: element })` when a placeholder is an element, like a `<code>` key. Placeholders are named (`{path}`), so a translation can put them in any order.
+- **The backend sends codes, not sentences.** Errors arrive as `{ kind, code, params, message, detail }`; their text is the entry `error.<code>`. git's own words (`detail`) are shown as they are.
+- **Adding a string:** add it to `en.json` and `zh-Hans.json`, then run `npm run check:locales -- --update zh-Hans` to record which English the translation was made from.
+- **Changing English text:** the checks then list the Chinese entries made from the old English. Update them, then run the `--update` command above.
+- **Adding a language:** add `app/src/locales/<tag>.json` and its name in `LOCALES` / `LOCALE_NAMES` (`src/lib/i18n.ts`), and map its system tags in `matchLocale`.
+- **Pseudo-language:** development builds (`npm run tauri dev`) offer "Pseudo (en-XA)" in Settings. It shows every entry accented and a third longer, so text that skipped the catalog stays plain English, and layouts too tight for longer words show.
+
+Checks (all run in CI):
+
+```sh
+cd app
+npm run check:strings    # no text written in the code (uses TypeScript's parser)
+npm run check:locales    # every language: same entries and placeholders, right plural forms, nothing out of date
+cargo test -p gitid-app  # every error code the backend can send has an English entry
+```
+
+`check:strings` can't tell a lone lowercase word shown as text (like "used") from a code value, so review those by hand.
 
 ## Tests
 

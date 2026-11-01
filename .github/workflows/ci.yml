@@ -99,6 +99,11 @@ jobs:
         shell: bash
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
       - run: npm run typecheck
+      # Localisation: no text written in the code, and every language has
+      # every entry, with the same placeholders, translated from the current
+      # English (see "Localisation" in the README).
+      - run: npm run check:strings
+      - run: npm run check:locales
       # Builds app/dist, which the Rust side embeds; clippy needs it to exist.
       - run: npm run build
       - run: cargo clippy -p gitid-app --all-targets -- -D warnings

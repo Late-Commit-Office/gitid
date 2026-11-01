@@ -14,8 +14,21 @@ import zhHans from "../locales/zh-Hans.json";
 
 export const LOCALES = ["en", "zh-Hans"] as const;
 export type Locale = (typeof LOCALES)[number];
+
+/**
+ * A made-up language for development builds only: every entry is English
+ * with accents, about a third longer, in ⟦brackets⟧. Text that skipped the
+ * catalog stays plain English, and layouts too tight for longer words show.
+ */
+export const PSEUDO = "en-XA";
+export type Pseudo = typeof PSEUDO;
+/** Offered only in development builds (`npm run tauri dev`). */
+export const PSEUDO_AVAILABLE: boolean = import.meta.env.DEV;
+/** Its name in the language picker; not a real language, so not translated. */
+export const PSEUDO_NAME = "Pseudo (en-XA)";
+
 /** What the user picked in Settings: a language, or follow the system. */
-export type LanguageChoice = Locale | "system";
+export type LanguageChoice = Locale | Pseudo | "system";
 
 /** Each language's own name for itself, for the language picker. */
 export const LOCALE_NAMES: Record<Locale, string> = {
@@ -37,21 +50,25 @@ export type RichParams = Record<string, string | number | Node>;
 
 const CATALOGS: Record<Locale, Catalog> = { en, "zh-Hans": zhHans };
 
-let current: Locale = "en";
+let current: Locale | Pseudo = "en";
 
 /** The language in use. */
-export function locale(): Locale {
+export function locale(): Locale | Pseudo {
   return current;
 }
 
 /** Switch language. Callers re-render; nothing here touches the page except `<html lang>`. */
-export function setLocale(next: Locale): void {
+export function setLocale(next: Locale | Pseudo): void {
   current = next;
   document.documentElement.lang = next;
 }
 
 /** The language to use for a choice; "system" follows the system's preferred languages. */
-export function resolveLocale(choice: LanguageChoice, preferred: readonly string[] = systemLanguages()): Locale {
+export function resolveLocale(
+  choice: LanguageChoice,
+  preferred: readonly string[] = systemLanguages(),
+): Locale | Pseudo {
+  if (choice === PSEUDO) return PSEUDO_AVAILABLE ? PSEUDO : "en";
   if (choice !== "system") return choice;
   for (const tag of preferred) {
     const found = matchLocale(tag);
@@ -138,6 +155,12 @@ export function hasKey(key: string): key is MessageKey {
 const PLACEHOLDER = /\{(\w+)\}/g;
 
 function lookup(key: string): string {
+  if (current === PSEUDO) {
+    const english = (en as Catalog)[key];
+    if (english !== undefined) return pseudo(english);
+    missingKey(key);
+    return key;
+  }
   const own = CATALOGS[current][key];
   if (own !== undefined) return own;
   const fallback = (en as Catalog)[key];
@@ -153,8 +176,27 @@ function lookup(key: string): string {
 function pluralKey(base: string, count: number): string {
   const category = new Intl.PluralRules(current).select(count);
   const exact = `${base}.${category}`;
-  return exact in CATALOGS[current] || exact in en ? exact : `${base}.other`;
+  const own = current === PSEUDO ? {} : CATALOGS[current];
+  return exact in own || exact in en ? exact : `${base}.other`;
 }
+
+const ACCENTED: Record<string, string> = Object.fromEntries(
+  [..."abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"].map((c, i) => [
+    c,
+    [..."åƀçđéƒĝĥîĵķļɱñöþǫŕšţûṽŵẋýžÅƁÇĐÉƑĜĤÎĴĶĻṀÑÖÞǪŔŠŢÛṼŴẊÝŽ"][i],
+  ]),
+);
+
+/** "Saved {key}." -> "⟦Šåṽéð {key}. ·····⟧": placeholders stay as they are. */
+function pseudo(text: string): string {
+  const parts = text.split(PLACEHOLDER_SPLIT);
+  const accented = parts.map((p, i) => (i % 2 === 1 ? `{${p}}` : [...p].map((c) => ACCENTED[c] ?? c).join(""))).join("");
+  const pad = "·".repeat(Math.ceil(text.length * 0.3));
+  return `⟦${accented} ${pad}⟧`;
+}
+
+/** Splits on placeholders, keeping their names at odd indexes. */
+const PLACEHOLDER_SPLIT = /\{(\w+)\}/;
 
 function fill(text: string, params: Params | undefined, key: string): string {
   return text.replace(PLACEHOLDER, (whole, name: string) => {

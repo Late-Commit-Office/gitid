@@ -3,7 +3,18 @@
 
 import { api, AppError } from "../lib/api";
 import { append, clear, el } from "../lib/dom";
-import { type LanguageChoice, type MessageKey, LOCALE_NAMES, LOCALES, resolveLocale, t, tx } from "../lib/i18n";
+import {
+  type LanguageChoice,
+  type MessageKey,
+  LOCALE_NAMES,
+  LOCALES,
+  PSEUDO,
+  PSEUDO_AVAILABLE,
+  PSEUDO_NAME,
+  resolveLocale,
+  t,
+  tx,
+} from "../lib/i18n";
 import { choiceLabel, errorDetail, errorText, settingHelp, settingLabel, settingPlaceholder } from "../lib/messages";
 import { tilde } from "../lib/paths";
 import type { CommandError, SettingGroup, SettingValue, SettingsView } from "../lib/types";
@@ -185,16 +196,18 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
     const key = "language";
     const id = "setting-language";
     // The system's language, named in itself, so it reads right whatever is chosen now.
-    const system = LOCALE_NAMES[resolveLocale("system")];
+    const resolved = resolveLocale("system");
+    const system = resolved === PSEUDO ? PSEUDO : LOCALE_NAMES[resolved];
     const select = el("select", { attrs: { id, "data-key": key } });
     const choices: [LanguageChoice, string][] = [
       ["system", t("settings.language.system", { language: system })],
       ...LOCALES.map((l): [LanguageChoice, string] => [l, LOCALE_NAMES[l]]),
+      ...(PSEUDO_AVAILABLE ? [[PSEUDO, PSEUDO_NAME] as [LanguageChoice, string]] : []),
     ];
     for (const [value, label] of choices) {
       const attrs: Record<string, string> = { value, ...(value === options.language ? { selected: "" } : {}) };
       // Each language name is in its own language; tell screen readers which.
-      if (value !== "system") attrs.lang = value;
+      if (value !== "system" && value !== PSEUDO) attrs.lang = value;
       append(select, el("option", { attrs }, label));
     }
     select.addEventListener("change", async () => {

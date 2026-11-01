@@ -2,7 +2,17 @@
 
 import { api } from "./lib/api";
 import { append, clear, el } from "./lib/dom";
-import { type LanguageChoice, type MessageKey, LOCALES, resolveLocale, setLocale, t, tx } from "./lib/i18n";
+import {
+  type LanguageChoice,
+  type MessageKey,
+  LOCALES,
+  PSEUDO,
+  PSEUDO_AVAILABLE,
+  resolveLocale,
+  setLocale,
+  t,
+  tx,
+} from "./lib/i18n";
 import { setHome } from "./lib/paths";
 import { rememberFolder } from "./lib/recent";
 import { mountIdentityView } from "./views/identity";
@@ -28,6 +38,7 @@ if (root) void start(root);
 async function loadLanguage(): Promise<LanguageChoice> {
   try {
     const saved = await api.language();
+    if (saved === PSEUDO && PSEUDO_AVAILABLE) return PSEUDO;
     return LOCALES.find((l) => l === saved) ?? "system";
   } catch {
     return "system";
