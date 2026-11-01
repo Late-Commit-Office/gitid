@@ -9,9 +9,21 @@ use gitid_core::{
 use crate::style;
 use crate::{EXIT_OK, EXIT_PROBLEMS};
 
-pub fn run(git: &SystemGit, version: GitVersion, path: &Path) -> Result<u8> {
+pub fn run(git: &SystemGit, version: GitVersion, path: &Path, json: bool) -> Result<u8> {
     let folder = gitid_core::paths::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let id = effective_identity(git, &folder)?;
+    if json {
+        let report = id.report();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).expect("identity serializes")
+        );
+        return Ok(if report.has_problems {
+            EXIT_PROBLEMS
+        } else {
+            EXIT_OK
+        });
+    }
     // Only used to label values that come from a rule; never fatal.
     let rules = rules::list_rules(git).unwrap_or_default();
 

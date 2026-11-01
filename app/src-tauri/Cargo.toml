@@ -1,0 +1,18 @@
+[package]
+name = "gitid-app"
+description = "gitid desktop app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# Desktop only, so no [lib] / mobile entry point (see Tauri's template for that).
+
+[build-dependencies]
+tauri-build = { workspace = true }
+
+[dependencies]
+gitid-core = { workspace = true, features = ["serde"] }
+tauri = { workspace = true }
+tauri-plugin-dialog = { workspace = true }
+serde = { workspace = true }

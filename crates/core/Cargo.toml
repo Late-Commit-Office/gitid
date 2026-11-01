@@ -6,5 +6,13 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
-# No dependencies yet on purpose. serde (for Tauri / --json) arrives with step 3.
+[features]
+# Serialize the public types (for the Tauri app and `gitid --json`).
+# Off by default so the core has no required dependencies.
+serde = ["dep:serde"]
+
 [dependencies]
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

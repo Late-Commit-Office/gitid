@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use gitid_core::rules::{self, Condition, NewRule, Rule, When};
 use gitid_core::{paths, Error, GitVersion, Result, SystemGit};
 
+use crate::args::AddArgs;
 use crate::style;
 use crate::{EXIT_OK, EXIT_PROBLEMS};
 
@@ -35,8 +36,30 @@ fn print_rule(n: Option<usize>, r: &Rule) {
     println!("   {:<12} file {file}", "");
 }
 
-pub fn list(git: &SystemGit) -> Result<u8> {
+/// A rule plus its human-readable description, for `--json`.
+#[derive(serde::Serialize)]
+struct RuleJson<'a> {
+    #[serde(flatten)]
+    rule: &'a Rule,
+    description: Vec<String>,
+}
+
+pub fn list(git: &SystemGit, json: bool) -> Result<u8> {
     let all = rules::list_rules(git)?;
+    if json {
+        let out: Vec<RuleJson> = all
+            .iter()
+            .map(|rule| RuleJson {
+                rule,
+                description: rules::describe(&rule.conditions),
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&out).expect("rules serialize")
+        );
+        return Ok(EXIT_OK);
+    }
     if all.is_empty() {
         println!("No identity rules yet. Add one with:");
         println!("  gitid rule add work --email you@company.example --dir ~/work");
@@ -51,19 +74,8 @@ pub fn list(git: &SystemGit) -> Result<u8> {
     Ok(EXIT_OK)
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn add(
-    git: &SystemGit,
-    version: GitVersion,
-    id: &str,
-    name: Option<&str>,
-    email: Option<&str>,
-    dirs: &[PathBuf],
-    hosts: &[String],
-    ssh_port: Option<u16>,
-    remotes: &[String],
-    checks: &[PathBuf],
-) -> Result<u8> {
+pub fn add(git: &SystemGit, version: GitVersion, a: &AddArgs) -> Result<u8> {
+    let (id, dirs, hosts, remotes, checks) = (a.id.as_str(), &a.dir, &a.host, &a.remote, &a.check);
     let existed = rules::list_rules(git)?
         .iter()
         .any(|r| r.id == id && r.managed);
@@ -71,7 +83,7 @@ pub fn add(
     let mut when: Vec<When> = dirs.iter().map(|d| When::Folder(d.clone())).collect();
     when.extend(hosts.iter().map(|h| When::RemoteHost {
         host: h.clone(),
-        ssh_port,
+        ssh_port: a.ssh_port,
     }));
     when.extend(remotes.iter().map(|p| When::RemotePattern(p.clone())));
 
@@ -80,8 +92,8 @@ pub fn add(
         version,
         &NewRule {
             id: id.into(),
-            name: name.map(Into::into),
-            email: email.map(Into::into),
+            name: a.name.clone(),
+            email: a.email.clone(),
             when,
         },
     )?;

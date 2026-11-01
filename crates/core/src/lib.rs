@@ -22,6 +22,7 @@ pub use config::{ConfigSnapshot, Entry, Origin, Scope};
 pub use error::{Error, Result};
 pub use git::{Git, GitVersion, SystemGit};
 pub use identity::{
-    effective_identity, Field, Identity, Part, Role, RoleIdentity, Severity, Source, Warning,
+    effective_identity, Field, Identity, IdentityReport, Part, Role, RoleIdentity, Severity,
+    Source, Warning, WarningReport,
 };
 pub use repo::RepoLocation;

@@ -3,6 +3,11 @@ use std::path::{Path, PathBuf};
 
 /// Which layer a config value comes from. Later layers win.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "lowercase")
+)]
 pub enum Scope {
     System,
     Global,
@@ -46,6 +51,11 @@ impl fmt::Display for Scope {
 
 /// Where exactly a value was read from.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(tag = "kind", content = "value", rename_all = "camelCase")
+)]
 pub enum Origin {
     /// A config file. Always absolute once parsed.
     File(PathBuf),
@@ -101,6 +111,7 @@ impl fmt::Display for Origin {
 
 /// One `key = value` line as git resolved it.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Entry {
     /// As git prints it: section and name lowercased, subsection kept as-is.
     pub key: String,
@@ -147,6 +158,7 @@ pub fn parse_bool(v: &str) -> Option<bool> {
 
 /// Every config entry visible from one folder, in git's order (later wins).
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ConfigSnapshot {
     pub entries: Vec<Entry>,
 }

@@ -201,7 +201,7 @@ fn remove_rule_cleans_up_and_keeps_other_rules() {
         ["work", "oss", "custom"]
     );
     assert!(!all[2].managed);
-    assert!(matches!(all[2].conditions[0], Condition::Other(_)));
+    assert!(matches!(all[2].conditions[0], Condition::Other { .. }));
 
     let work_rule = rules::find(&all, "work").unwrap();
     rules::remove_rule(t.git(), work_rule, true).unwrap();

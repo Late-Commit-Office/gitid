@@ -13,6 +13,11 @@ use crate::git::Git;
 use crate::repo::{self, RepoLocation};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "lowercase")
+)]
 pub enum Role {
     Author,
     Committer,
@@ -34,6 +39,11 @@ impl Role {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "lowercase")
+)]
 pub enum Part {
     Name,
     Email,
@@ -50,6 +60,11 @@ impl Part {
 
 /// Why a name or email has the value it has.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(tag = "kind", rename_all = "camelCase")
+)]
 pub enum Source {
     /// An environment variable such as `GIT_AUTHOR_NAME` or `EMAIL`.
     /// A GUI can't see the user's shell environment, so terminals may differ.
@@ -62,6 +77,7 @@ pub enum Source {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Field {
     pub value: String,
     pub source: Source,
@@ -69,6 +85,7 @@ pub struct Field {
 
 /// The identity git will use for one role.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct RoleIdentity {
     pub role: Role,
     /// `None` only when git refused to produce an identity and nothing is configured.
@@ -101,15 +118,23 @@ impl RoleIdentity {
 
 /// An environment variable that changes what git does.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct EnvVar {
     pub name: String,
+    /// Empty when `sensitive`: the value is never kept, so it can't leak
+    /// into a UI, a log or JSON output.
     pub value: String,
-    /// Can carry credentials (e.g. `GIT_CONFIG_PARAMETERS`); mask before showing.
+    /// Can carry credentials (e.g. `GIT_CONFIG_PARAMETERS`).
     pub sensitive: bool,
 }
 
 /// Everything the identity view needs for one folder.
 #[derive(Debug, Clone)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "camelCase")
+)]
 pub struct Identity {
     pub folder: PathBuf,
     pub repo: Option<RepoLocation>,
@@ -165,7 +190,7 @@ pub fn effective_identity(git: &dyn Git, folder: &Path) -> Result<Identity> {
         if let Some(value) = git.env_var(name) {
             env.push(EnvVar {
                 name: name.to_string(),
-                value,
+                value: if *sensitive { String::new() } else { value },
                 sensitive: *sensitive,
             });
         }
@@ -267,6 +292,11 @@ fn parse_ident(line: &str) -> Option<(String, String)> {
 // ---------------------------------------------------------------- warnings
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "lowercase")
+)]
 pub enum Severity {
     /// Commits will fail or carry the wrong identity.
     Problem,
@@ -275,6 +305,11 @@ pub enum Severity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(tag = "kind", rename_all = "camelCase")
+)]
 pub enum Warning {
     /// git would refuse to commit.
     Missing { role: Role, message: String },
@@ -395,6 +430,50 @@ impl Identity {
             .iter()
             .any(|w| w.severity() == Severity::Problem)
     }
+
+    /// The identity plus its warnings, ready to show or serialize.
+    pub fn report(&self) -> IdentityReport<'_> {
+        let warnings: Vec<WarningReport> =
+            self.warnings().iter().map(WarningReport::from).collect();
+        IdentityReport {
+            has_problems: warnings.iter().any(|w| w.severity == Severity::Problem),
+            identity: self,
+            warnings,
+        }
+    }
+}
+
+/// A warning as plain data: what kind, how bad, and the sentence to show.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct WarningReport {
+    pub severity: Severity,
+    pub warning: Warning,
+    pub message: String,
+}
+
+impl From<&Warning> for WarningReport {
+    fn from(w: &Warning) -> Self {
+        WarningReport {
+            severity: w.severity(),
+            warning: w.clone(),
+            message: w.to_string(),
+        }
+    }
+}
+
+/// What `gitid whoami --json` prints and the app's identity view receives.
+#[derive(Debug, Clone)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "camelCase")
+)]
+pub struct IdentityReport<'a> {
+    #[cfg_attr(feature = "serde", serde(flatten))]
+    pub identity: &'a Identity,
+    pub warnings: Vec<WarningReport>,
+    pub has_problems: bool,
 }
 
 #[cfg(test)]

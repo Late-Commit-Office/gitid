@@ -1,0 +1,26 @@
+// Prevents an extra console window on Windows in release builds. DO NOT REMOVE.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+//! The gitid desktop app: a thin Tauri shell over `gitid-core`.
+//!
+//! The webview never touches the shell or config files. It can only call the
+//! commands registered below, and each of those goes through the core, which
+//! goes through git.
+
+mod commands;
+mod state;
+
+fn main() {
+    tauri::Builder::default()
+        // Registered so Rust can show the native folder picker. The webview is
+        // granted no dialog permissions (see capabilities/default.json).
+        .plugin(tauri_plugin_dialog::init())
+        .manage(state::AppState::default())
+        .invoke_handler(tauri::generate_handler![
+            commands::git_info,
+            commands::get_identity,
+            commands::pick_folder,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running gitid");
+}

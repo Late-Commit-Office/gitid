@@ -5,6 +5,7 @@ use crate::error::{Error, Result};
 
 /// A git version, compared numerically.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct GitVersion {
     pub major: u32,
     pub minor: u32,

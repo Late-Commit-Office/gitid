@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The main window may use Tauri's core basics and gitid's own commands (allowed by default). No plugin permissions: the folder picker is opened from Rust.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

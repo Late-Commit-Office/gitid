@@ -4,7 +4,20 @@
 
 See which git identity applies to any folder, and why, so commits never fall back to your OS login name again.
 
-Status: **step 2 of 4** — the core library and the `gitid` CLI can explain the effective identity, edit config, and manage per-folder and per-server identity rules. The Tauri app comes next.
+Status: **step 3 of 4** — the `gitid` CLI explains the effective identity, edits config, and manages per-folder and per-server identity rules. The desktop app (Tauri) shows the identity for any folder; editing in the app comes in step 4.
+
+## The desktop app
+
+Needs [Rust](https://rustup.rs), [Node.js](https://nodejs.org) (LTS), and on macOS the Xcode Command Line Tools (`xcode-select --install`). On Linux, also Tauri's [system packages](https://v2.tauri.app/start/prerequisites/).
+
+```sh
+cd app
+npm install                  # first time; commit the package-lock.json it creates
+npm run tauri dev            # run with live reload
+npm run tauri build          # installable bundle in target/release/bundle/
+```
+
+Pick a folder and the app shows who commits there will be from, which file (or rule, or environment variable) each value comes from, and the git command to fix any problem.
 
 ## Try it
 
@@ -14,6 +27,7 @@ cargo install --path crates/cli         # puts `gitid` on your PATH
 gitid whoami                            # who will commits here be from, and why?
 gitid whoami ~/code/app
 gitid show ~/code/app --key user.email  # every value of a key, and which one wins
+gitid whoami --json                     # the same as JSON, for scripts
 
 gitid set user.name "Ann Lee"           # global by default
 gitid set user.email ann@repo.example --local
@@ -34,7 +48,7 @@ gitid rule add work --email ann@company.example --dir ~/work
 gitid rule add gitea --name annlee --email ann@gitea.example \
     --host gitea.example.com --ssh-port 2222 --check ~/code/blog
 
-gitid rule list
+gitid rule list                         # --json for scripts
 gitid rule check gitea ~/code/blog      # does it apply there?
 gitid rule remove work                  # also deletes its identity file
 ```
@@ -55,15 +69,23 @@ crates/core    gitid-core: all logic, no UI
   platform.rs  home folder, case sensitivity, how paths are written in includeIf
   paths.rs     canonical paths without Windows \\?\ prefixes
   secrets.rs   masks credentials before display
-crates/cli     gitid binary
+crates/cli     gitid binary (clap)
+app/           desktop app frontend: plain TypeScript, built with Vite
+  src/lib/     api.ts (typed calls to Rust), types.ts (the JSON shapes), dom.ts, paths.ts, recent.ts
+  src/views/   identity.ts
+app/src-tauri/ desktop app backend: commands.rs (the only calls the UI can make), state.rs
 ```
+
+The app's webview gets no plugin permissions: it can only call gitid's own commands, and even the folder picker is opened from Rust. Text from config is only ever inserted as text, never as HTML.
 
 The rule: every read and write goes through the `git` executable. Config files are never parsed or written directly. (gitid only creates the identities folder, and deletes identity files it created itself.)
 
 ## Tests
 
 ```sh
-cargo test
+cargo test                                   # core + CLI (the app isn't a default member)
+cargo test --features gitid-core/serde       # also the JSON contract tests the app relies on
+cd app && npm run typecheck                  # frontend types
 ```
 
 Integration tests run real git in temp folders with `GIT_CONFIG_GLOBAL` pointed at a temp file, `GIT_CONFIG_NOSYSTEM=1` and a temp `HOME`, so your own config is never read or changed. They need git installed (2.36+ for the server-rule tests; older versions skip them).
@@ -76,5 +98,7 @@ Integration tests run real git in temp folders with `GIT_CONFIG_GLOBAL` pointed 
 
 ## Notes for later steps
 
-- No dependencies yet: crates.io was unreachable when this was written. Swap the hand-rolled arg parser for clap, and add serde (for Tauri and `--json`), in step 3.
+- The app's bundle identifier is a placeholder (`io.github.gitid` in `app/src-tauri/tauri.conf.json`). Change it to a reverse domain you own before the first release; changing it later moves the app's data folder.
+- The app uses Tauri's default icons. `npm run tauri icon path/to/icon.png` generates a full set.
+- Steps 1–2 were built without registry access, so `gitid-core` has no required dependencies (serde is an optional feature).
 - macOS: `/usr/bin/git` may be the Command Line Tools shim; detect with `xcode-select -p` before calling it (TODO in `git/locate.rs`).

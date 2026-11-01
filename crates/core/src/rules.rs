@@ -21,6 +21,15 @@ const HASCONFIG_REMOTE: &str = "hasconfig:remote.*.url:";
 
 /// One `includeIf` condition, as git understands it.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(
+        tag = "kind",
+        rename_all = "camelCase",
+        rename_all_fields = "camelCase"
+    )
+)]
 pub enum Condition {
     /// `gitdir:<pattern>` or `gitdir/i:<pattern>`: repos stored under a folder.
     Folder {
@@ -30,7 +39,7 @@ pub enum Condition {
     /// `hasconfig:remote.*.url:<glob>`: repos with a matching remote (git 2.36+).
     RemoteUrl { pattern: String },
     /// Anything else (`onbranch:`, ...). Shown, never edited.
-    Other(String),
+    Other { raw: String },
 }
 
 impl Condition {
@@ -48,7 +57,7 @@ impl Condition {
         } else if let Some(p) = raw.strip_prefix(HASCONFIG_REMOTE) {
             Condition::RemoteUrl { pattern: p.into() }
         } else {
-            Condition::Other(raw.into())
+            Condition::Other { raw: raw.into() }
         }
     }
 
@@ -61,7 +70,7 @@ impl Condition {
             } => format!("gitdir/i:{pattern}"),
             Condition::Folder { pattern, .. } => format!("gitdir:{pattern}"),
             Condition::RemoteUrl { pattern } => format!("{HASCONFIG_REMOTE}{pattern}"),
-            Condition::Other(s) => s.clone(),
+            Condition::Other { raw } => raw.clone(),
         }
     }
 
@@ -75,13 +84,18 @@ impl fmt::Display for Condition {
         match self {
             Condition::Folder { pattern, .. } => write!(f, "repos under {pattern}"),
             Condition::RemoteUrl { pattern } => write!(f, "remote URL matches {pattern}"),
-            Condition::Other(s) => write!(f, "{s}"),
+            Condition::Other { raw } => write!(f, "{raw}"),
         }
     }
 }
 
 /// An identity rule found in the global config.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "camelCase")
+)]
 pub struct Rule {
     /// Short handle: the identity file's name without extension.
     pub id: String,

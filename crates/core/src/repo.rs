@@ -5,6 +5,11 @@ use crate::git::Git;
 
 /// Where a folder's repository lives, if it is inside one.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "camelCase")
+)]
 pub struct RepoLocation {
     /// Top of the working tree. `None` for bare repos or when the folder is
     /// inside the `.git` directory itself.
