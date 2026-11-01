@@ -52,6 +52,9 @@ export const api = {
   /** null: find git automatically again. */
   setGitPath: (path: string | null) => call<SettingsView>("set_git_path", { path }),
   pickGitExecutable: () => call<string | null>("pick_git_executable"),
+  /** The language chosen in Settings; null follows the system. */
+  language: () => call<string | null>("get_language"),
+  setLanguage: (language: string | null) => call<void>("set_language", { language }),
 
   rules: () => call<RulesView>("list_rules"),
   saveRule: (input: RuleInput) => call<SaveRuleResult>("save_rule", { input }),

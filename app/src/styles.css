@@ -16,7 +16,10 @@
   --note-wash: #f7f0dc;
   --focus: #2f6fb3;
 
-  --ui: system-ui, -apple-system, "Segoe UI", "Ubuntu", "Cantarell", sans-serif;
+  /* Latin faces first, then Simplified Chinese ones (macOS, Windows, Linux):
+     a font list is per character, so English text keeps the Latin face. */
+  --ui: system-ui, -apple-system, "Segoe UI", "Ubuntu", "Cantarell", "PingFang SC", "Microsoft YaHei UI",
+    "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", monospace;
 
   color-scheme: light dark;

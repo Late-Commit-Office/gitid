@@ -1,7 +1,8 @@
-// App shell: finds git, then shows one of the views.
+// App shell: picks the language, finds git, then shows one of the views.
 
 import { api } from "./lib/api";
 import { append, clear, el } from "./lib/dom";
+import { type LanguageChoice, type MessageKey, LOCALES, resolveLocale, setLocale, t, tx } from "./lib/i18n";
 import { setHome } from "./lib/paths";
 import { rememberFolder } from "./lib/recent";
 import { mountIdentityView } from "./views/identity";
@@ -12,42 +13,79 @@ import { mountSettingsView } from "./views/settings";
 
 type ViewName = "identity" | "scan" | "rules" | "scopes" | "settings";
 
+const TABS: [ViewName, MessageKey][] = [
+  ["identity", "tab.identity"],
+  ["scan", "tab.scan"],
+  ["rules", "tab.rules"],
+  ["scopes", "tab.scopes"],
+  ["settings", "tab.settings"],
+];
+
 const root = document.getElementById("app");
 if (root) void start(root);
 
-async function start(root: HTMLElement): Promise<void> {
-  const status = el("p", { class: "git-status muted" }, "Looking for git…");
-  const tabs = el("nav", { class: "tabs", attrs: { "aria-label": "Views" } });
-  const content = el("div", { class: "content" });
-  append(root, el("header", { class: "top" }, el("h1", {}, "gitid"), tabs, status), content);
+/** The saved choice; anything unknown (a language removed later) means "system". */
+async function loadLanguage(): Promise<LanguageChoice> {
+  try {
+    const saved = await api.language();
+    return LOCALES.find((l) => l === saved) ?? "system";
+  } catch {
+    return "system";
+  }
+}
 
-  let gitOk = false;
+async function start(root: HTMLElement): Promise<void> {
+  let language = await loadLanguage();
+  setLocale(resolveLocale(language));
+
+  const status = el("p", { class: "git-status muted" });
+  const tabs = el("nav", { class: "tabs" });
+  const content = el("div", { class: "content" });
+  append(root, el("header", { class: "top" }, el("h1", {}, t("app.title")), tabs, status), content);
+
+  let git: { version: string; path: string } | null = null;
+  let looking = true;
   let current: ViewName = "identity";
+
+  function renderStatus(): void {
+    if (looking) {
+      status.textContent = t("app.git.looking");
+      status.removeAttribute("title");
+    } else if (git) {
+      status.textContent = t("app.git.version", { version: git.version });
+      status.title = git.path;
+    } else {
+      status.textContent = t("app.git.notFound");
+      status.removeAttribute("title");
+    }
+  }
 
   async function refreshGit(): Promise<void> {
     try {
-      const git = await api.gitInfo();
-      setHome(git.home);
-      status.textContent = `git ${git.version}`;
-      status.title = git.path;
-      gitOk = true;
+      const info = await api.gitInfo();
+      setHome(info.home);
+      git = { version: info.version, path: info.path };
     } catch {
-      status.textContent = "git not found";
-      status.removeAttribute("title");
-      gitOk = false;
+      git = null;
     }
+    looking = false;
+    renderStatus();
+  }
+
+  /** Switch language and redraw everything, staying on the current view. */
+  function changeLanguage(next: LanguageChoice): void {
+    language = next;
+    setLocale(resolveLocale(next));
+    renderStatus();
+    show(current);
   }
 
   function show(view: ViewName): void {
     current = view;
+    document.title = t("app.title");
+    tabs.setAttribute("aria-label", t("app.views"));
     clear(tabs);
-    for (const [name, label] of [
-      ["identity", "Identity"],
-      ["scan", "Scan"],
-      ["rules", "Rules"],
-      ["scopes", "All config"],
-      ["settings", "Settings"],
-    ] as [ViewName, string][]) {
+    for (const [name, label] of TABS) {
       append(
         tabs,
         el(
@@ -58,13 +96,13 @@ async function start(root: HTMLElement): Promise<void> {
             attrs: name === current ? { "aria-current": "page" } : {},
             on: { click: () => name !== current && show(name) },
           },
-          label,
+          t(label),
         ),
       );
     }
 
     clear(content);
-    if (view !== "settings" && !gitOk) {
+    if (view !== "settings" && !git) {
       append(content, noGit(() => show("settings")));
       return;
     }
@@ -85,25 +123,23 @@ async function start(root: HTMLElement): Promise<void> {
     } else {
       mountSettingsView(content, {
         onGitChanged: () => void refreshGit(),
+        language,
+        onLanguageChanged: changeLanguage,
       });
     }
   }
 
+  renderStatus();
   await refreshGit();
-  show(gitOk ? "identity" : "settings");
+  show(git ? "identity" : "settings");
 }
 
 function noGit(openSettings: () => void): HTMLElement {
   return el(
     "div",
     { class: "verdict problem", attrs: { role: "alert" } },
-    el("p", { class: "lede" }, "gitid needs git, and couldn't find it."),
-    el(
-      "p",
-      {},
-      "Install git from git-scm.com (on a Mac, running xcode-select --install also works) and reopen gitid, or tell gitid where git is.",
-    ),
-    el("p", {}, el("button", { type: "button", class: "primary", on: { click: openSettings } }, "Choose where git is")),
+    el("p", { class: "lede" }, t("noGit.lede")),
+    el("p", {}, tx("noGit.body", { command: el("code", {}, "xcode-select --install") })),
+    el("p", {}, el("button", { type: "button", class: "primary", on: { click: openSettings } }, t("noGit.choose"))),
   );
 }
-

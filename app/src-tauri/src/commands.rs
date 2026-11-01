@@ -285,6 +285,35 @@ pub async fn set_git_path(
     blocking(move || view_for(chosen)).await
 }
 
+/// The language chosen in Settings; `None` follows the system. The frontend
+/// decides what "the system" means, from the webview's languages.
+#[tauri::command]
+pub fn get_language(state: State<'_, AppState>) -> Option<String> {
+    state.language()
+}
+
+/// Save the app's language (`None`: follow the system). Only the tag's shape
+/// is checked here; the frontend knows which languages it has.
+#[tauri::command]
+pub fn set_language(state: State<'_, AppState>, language: Option<String>) -> CmdResult<()> {
+    if let Some(tag) = &language {
+        if !is_language_tag(tag) {
+            return Err(Error::InvalidInput(format!("{tag:?} isn't a language tag")).into());
+        }
+    }
+    state.set_language(language).map_err(|e| CommandError {
+        kind: "internal",
+        message: format!("couldn't save the app's settings: {e}"),
+    })
+}
+
+/// A BCP 47-shaped tag: letters, digits and hyphens, starting with a letter.
+fn is_language_tag(tag: &str) -> bool {
+    (2..=35).contains(&tag.len())
+        && tag.starts_with(|c: char| c.is_ascii_alphabetic())
+        && tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
+
 /// Native file picker for the git program. `None` if cancelled.
 #[tauri::command]
 pub async fn pick_git_executable(
@@ -300,4 +329,19 @@ pub async fn pick_git_executable(
     Ok(picked
         .and_then(|p| p.into_path().ok())
         .map(|p| p.to_string_lossy().into_owned()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_language_tag;
+
+    #[test]
+    fn language_tags() {
+        for ok in ["en", "zh-Hans", "zh-Hans-CN", "en-XA"] {
+            assert!(is_language_tag(ok), "{ok}");
+        }
+        for bad in ["", "e", "-en", "zh_Hans", "en US", "../x", "1en"] {
+            assert!(!is_language_tag(bad), "{bad}");
+        }
+    }
 }

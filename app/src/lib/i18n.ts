@@ -1,0 +1,184 @@
+// Translations. Every user-visible string goes through t() (plain text) or
+// tx() (text with elements inside it, like a <code> key). Entries live in
+// src/locales/<locale>.json, one flat object per language; en.json is the
+// source and the fallback for anything another language doesn't have.
+//
+// Entries use named placeholders, `{key}`, so a translation can put them in
+// any order. Plural entries are split by CLDR category: `x.one`, `x.other`
+// (English needs both; Chinese only `x.other`), and looked up with tn().
+//
+// Translations are inserted as text, never as HTML.
+
+import en from "../locales/en.json";
+import zhHans from "../locales/zh-Hans.json";
+
+export const LOCALES = ["en", "zh-Hans"] as const;
+export type Locale = (typeof LOCALES)[number];
+/** What the user picked in Settings: a language, or follow the system. */
+export type LanguageChoice = Locale | "system";
+
+/** Each language's own name for itself, for the language picker. */
+export const LOCALE_NAMES: Record<Locale, string> = {
+  en: "English",
+  "zh-Hans": "简体中文",
+};
+
+type Catalog = Record<string, string>;
+type English = typeof en;
+
+/** Every key in en.json. */
+export type MessageKey = keyof English;
+/** Keys with plural forms, without the `.one` / `.other` ending. */
+export type PluralKey = { [K in MessageKey]: K extends `${infer Base}.other` ? Base : never }[MessageKey];
+
+export type Params = Record<string, string | number>;
+/** For tx(): a placeholder can also be an element (a <code> key, a link). */
+export type RichParams = Record<string, string | number | Node>;
+
+const CATALOGS: Record<Locale, Catalog> = { en, "zh-Hans": zhHans };
+
+let current: Locale = "en";
+
+/** The language in use. */
+export function locale(): Locale {
+  return current;
+}
+
+/** Switch language. Callers re-render; nothing here touches the page except `<html lang>`. */
+export function setLocale(next: Locale): void {
+  current = next;
+  document.documentElement.lang = next;
+}
+
+/** The language to use for a choice; "system" follows the system's preferred languages. */
+export function resolveLocale(choice: LanguageChoice, preferred: readonly string[] = systemLanguages()): Locale {
+  if (choice !== "system") return choice;
+  for (const tag of preferred) {
+    const found = matchLocale(tag);
+    if (found) return found;
+  }
+  return "en";
+}
+
+/**
+ * Map a BCP 47 tag to a supported language. Chinese is only matched when
+ * it's Simplified: zh, zh-CN, zh-SG and zh-Hans-*; Traditional (zh-TW,
+ * zh-HK, zh-MO, zh-Hant-*) moves on to the next preferred language.
+ */
+export function matchLocale(tag: string): Locale | null {
+  const parts = tag.toLowerCase().split(/[-_]/);
+  if (parts[0] === "en") return "en";
+  if (parts[0] === "zh") {
+    if (parts.includes("hant")) return null;
+    if (parts.includes("hans")) return "zh-Hans";
+    const region = parts[1];
+    if (region === "tw" || region === "hk" || region === "mo") return null;
+    return "zh-Hans";
+  }
+  return null;
+}
+
+function systemLanguages(): readonly string[] {
+  if (typeof navigator === "undefined") return [];
+  return navigator.languages?.length ? navigator.languages : [navigator.language];
+}
+
+/** The text of an entry with its placeholders filled in. */
+export function t(key: MessageKey, params?: Params): string {
+  return fill(lookup(key), params, key);
+}
+
+/** A plural entry, chosen by `count`. `count` is also available as `{count}`. */
+export function tn(key: PluralKey, count: number, params?: Params): string {
+  return fill(lookup(pluralKey(key, count)), { count: formatNumber(count), ...params }, key);
+}
+
+/**
+ * An entry whose placeholders may be elements, as a fragment to append.
+ * Text pieces become text nodes, so nothing is ever parsed as HTML.
+ */
+export function tx(key: MessageKey, params: RichParams): DocumentFragment {
+  const frag = document.createDocumentFragment();
+  const text = lookup(key);
+  let last = 0;
+  for (const m of text.matchAll(PLACEHOLDER)) {
+    const at = m.index ?? 0;
+    if (at > last) frag.appendChild(document.createTextNode(text.slice(last, at)));
+    const value = params[m[1]];
+    if (value === undefined) {
+      missingParam(key, m[1]);
+      frag.appendChild(document.createTextNode(m[0]));
+    } else {
+      frag.appendChild(typeof value === "object" ? value : document.createTextNode(String(value)));
+    }
+    last = at + m[0].length;
+  }
+  if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+  return frag;
+}
+
+/** "a, b and c" in the current language. */
+export function formatList(items: readonly string[]): string {
+  // Intl.ListFormat arrived in Safari 14.1; macOS 10.15 may have an older WebKit.
+  if (typeof Intl.ListFormat !== "function") return items.join(current === "en" ? ", " : "、");
+  return new Intl.ListFormat(current, { type: "conjunction" }).format(items);
+}
+
+export function formatNumber(n: number): string {
+  return new Intl.NumberFormat(current).format(n);
+}
+
+/** Whether a key exists in en.json, for codes that arrive from the backend. */
+export function hasKey(key: string): key is MessageKey {
+  return key in en;
+}
+
+// ---------------------------------------------------------------- internals
+
+const PLACEHOLDER = /\{(\w+)\}/g;
+
+function lookup(key: string): string {
+  const own = CATALOGS[current][key];
+  if (own !== undefined) return own;
+  const fallback = (en as Catalog)[key];
+  if (fallback !== undefined) {
+    if (current !== "en") missingKey(key);
+    return fallback;
+  }
+  // Only reachable with a key built at runtime (pluralKey, backend codes).
+  missingKey(key);
+  return key;
+}
+
+function pluralKey(base: string, count: number): string {
+  const category = new Intl.PluralRules(current).select(count);
+  const exact = `${base}.${category}`;
+  return exact in CATALOGS[current] || exact in en ? exact : `${base}.other`;
+}
+
+function fill(text: string, params: Params | undefined, key: string): string {
+  return text.replace(PLACEHOLDER, (whole, name: string) => {
+    const value = params?.[name];
+    if (value === undefined) {
+      missingParam(key, name);
+      return whole;
+    }
+    return String(value);
+  });
+}
+
+const warned = new Set<string>();
+
+function missingKey(key: string): void {
+  warnOnce(`${current}:${key}`, `i18n: no "${key}" in ${current}`);
+}
+
+function missingParam(key: string, name: string): void {
+  warnOnce(`${key}{${name}}`, `i18n: "${key}" needs {${name}}`);
+}
+
+function warnOnce(id: string, text: string): void {
+  if (!import.meta.env.DEV || warned.has(id)) return;
+  warned.add(id);
+  console.warn(text);
+}

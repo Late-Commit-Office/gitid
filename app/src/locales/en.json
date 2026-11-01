@@ -1,0 +1,27 @@
+{
+  "app.title": "gitid",
+  "app.views": "Views",
+  "app.git.looking": "Looking for git…",
+  "app.git.version": "git {version}",
+  "app.git.notFound": "git not found",
+
+  "tab.identity": "Identity",
+  "tab.scan": "Scan",
+  "tab.rules": "Rules",
+  "tab.scopes": "All config",
+  "tab.settings": "Settings",
+
+  "noGit.lede": "gitid needs git, and couldn't find it.",
+  "noGit.body": "Install git from git-scm.com (on a Mac, running {command} also works) and reopen gitid, or tell gitid where git is.",
+  "noGit.choose": "Choose where git is",
+
+  "copy.button": "Copy",
+  "copy.title": "Copy to clipboard",
+  "copy.done": "Copied",
+  "copy.failed": "Select and copy",
+
+  "settings.language.title": "Language",
+  "settings.language.label": "Show gitid in",
+  "settings.language.help": "The language of gitid's own screens. git's messages and your config are shown as they are.",
+  "settings.language.system": "Same as system ({language})"
+}

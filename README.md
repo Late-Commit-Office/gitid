@@ -79,9 +79,10 @@ crates/core    gitid-core: all logic, no UI
   secrets.rs   masks credentials before display
 crates/cli     gitid binary (clap)
 app/           desktop app frontend: plain TypeScript, built with Vite
-  src/lib/     api.ts (typed calls to Rust), types.ts (the JSON shapes), dom.ts, paths.ts, recent.ts
+  src/lib/     api.ts (typed calls to Rust), types.ts (the JSON shapes), i18n.ts (t(), plurals, language choice), dom.ts, paths.ts, recent.ts
+  src/locales/ en.json (source and fallback), zh-Hans.json
   src/views/   identity.ts, scan.ts, rules.ts, scopes.ts (All config), settings.ts
-app/src-tauri/ desktop app backend: commands.rs, rule_commands.rs, scope_commands.rs, scan_commands.rs (the only calls the UI can make), state.rs (which git; saved settings.json)
+app/src-tauri/ desktop app backend: commands.rs, rule_commands.rs, scope_commands.rs, scan_commands.rs (the only calls the UI can make), state.rs (which git and the language; saved settings.json)
 ```
 
 The app's webview gets no plugin permissions: it can only call gitid's own commands, and even the folder picker is opened from Rust. Text from config is only ever inserted as text, never as HTML.

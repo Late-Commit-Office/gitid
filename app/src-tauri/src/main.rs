@@ -22,7 +22,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(state::AppState::default())
         .setup(|app| {
-            // The app's own settings (which git to use) live in its config folder.
+            // The app's own settings (which git to use, the language) live in its config folder.
             let dir = app.path().app_config_dir()?;
             app.state::<state::AppState>()
                 .load(dir.join("settings.json"));
@@ -36,6 +36,8 @@ fn main() {
             commands::set_setting,
             commands::set_git_path,
             commands::pick_git_executable,
+            commands::get_language,
+            commands::set_language,
             rule_commands::list_rules,
             rule_commands::save_rule,
             rule_commands::remove_rule,

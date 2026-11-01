@@ -1,3 +1,5 @@
+import { t } from "./i18n";
+
 // Tiny DOM helpers. Text always goes in through text nodes, never innerHTML,
 // because config values (names, paths, URLs) are untrusted text.
 
@@ -41,15 +43,15 @@ export function clear(node: Node): void {
 
 /** A button that copies `text`, then briefly says so. */
 export function copyButton(text: string): HTMLButtonElement {
-  const button = el("button", { class: "copy", type: "button", title: "Copy to clipboard" }, "Copy");
+  const button = el("button", { class: "copy", type: "button", title: t("copy.title") }, t("copy.button"));
   button.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(text);
-      button.textContent = "Copied";
+      button.textContent = t("copy.done");
     } catch {
-      button.textContent = "Select and copy";
+      button.textContent = t("copy.failed");
     }
-    setTimeout(() => (button.textContent = "Copy"), 1500);
+    setTimeout(() => (button.textContent = t("copy.button")), 1500);
   });
   return button;
 }

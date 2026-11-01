@@ -1,5 +1,6 @@
 //! App-wide state shared by commands, and the app's own small settings file
-//! (separate from git config: it only holds which git executable to use).
+//! (separate from git config: which git executable to use, and the app's
+//! language).
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,6 +15,9 @@ use serde::{Deserialize, Serialize};
 struct AppSettings {
     /// A git executable chosen in Settings. `None` searches the usual places.
     git_path: Option<PathBuf>,
+    /// The language chosen in Settings, as a BCP 47 tag the frontend knows
+    /// (`en`, `zh-Hans`). `None` follows the system.
+    language: Option<String>,
 }
 
 #[derive(Default)]
@@ -44,9 +48,24 @@ impl AppState {
 
     /// Use this git from now on (`None`: search again), and save the choice.
     pub fn set_git_override(&self, path: Option<PathBuf>) -> std::io::Result<()> {
+        self.update(|s| s.git_path = path)
+    }
+
+    /// The language chosen in Settings; `None` follows the system.
+    pub fn language(&self) -> Option<String> {
+        lock(&self.settings).language.clone()
+    }
+
+    /// Use this language from now on (`None`: follow the system), and save the choice.
+    pub fn set_language(&self, language: Option<String>) -> std::io::Result<()> {
+        self.update(|s| s.language = language)
+    }
+
+    /// Change the settings and save them.
+    fn update(&self, change: impl FnOnce(&mut AppSettings)) -> std::io::Result<()> {
         let snapshot = {
             let mut s = lock(&self.settings);
-            s.git_path = path;
+            change(&mut s);
             s.clone()
         };
         match lock(&self.file).as_deref() {

@@ -3,6 +3,7 @@
 
 import { api, AppError } from "../lib/api";
 import { append, clear, el } from "../lib/dom";
+import { type LanguageChoice, LOCALE_NAMES, LOCALES, resolveLocale, t } from "../lib/i18n";
 import { tilde } from "../lib/paths";
 import type { SettingGroup, SettingValue, SettingsView } from "../lib/types";
 
@@ -25,6 +26,10 @@ interface Status {
 export interface SettingsOptions {
   /** Called after the app starts using a different git. */
   onGitChanged: () => void;
+  /** The language chosen in Settings. */
+  language: LanguageChoice;
+  /** Called after a new language is saved; the app redraws in it. */
+  onLanguageChanged: (language: LanguageChoice) => void;
 }
 
 export function mountSettingsView(root: HTMLElement, options: SettingsOptions): void {
@@ -89,7 +94,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
         );
       }
     }
-    append(body, gitSection(view));
+    append(body, gitSection(view), languageSection());
   }
 
   function rowStatus(key: string): HTMLElement {
@@ -175,6 +180,53 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
       { class: `row row-${s.kind.kind}` },
       el("div", { class: "row-text" }, label, el("p", { class: "muted help" }, s.help)),
       el("div", { class: "row-control" }, control, rowStatus(s.key)),
+    );
+  }
+
+  function languageSection(): HTMLElement {
+    const key = "language";
+    const id = "setting-language";
+    // The system's language, named in itself, so it reads right whatever is chosen now.
+    const system = LOCALE_NAMES[resolveLocale("system")];
+    const select = el("select", { attrs: { id, "data-key": key } });
+    const choices: [LanguageChoice, string][] = [
+      ["system", t("settings.language.system", { language: system })],
+      ...LOCALES.map((l): [LanguageChoice, string] => [l, LOCALE_NAMES[l]]),
+    ];
+    for (const [value, label] of choices) {
+      const attrs: Record<string, string> = { value, ...(value === options.language ? { selected: "" } : {}) };
+      // Each language name is in its own language; tell screen readers which.
+      if (value !== "system") attrs.lang = value;
+      append(select, el("option", { attrs }, label));
+    }
+    select.addEventListener("change", async () => {
+      const next = select.value as LanguageChoice;
+      try {
+        await api.setLanguage(next === "system" ? null : next);
+      } catch (e) {
+        status = { key, ok: false, text: message(e) };
+        render();
+        return;
+      }
+      // Redraws the whole app (this view included) in the new language.
+      options.onLanguageChanged(next);
+    });
+
+    return el(
+      "section",
+      { class: "group" },
+      el("h2", {}, t("settings.language.title")),
+      el(
+        "div",
+        { class: "row row-choice" },
+        el(
+          "div",
+          { class: "row-text" },
+          el("label", { attrs: { for: id } }, t("settings.language.label")),
+          el("p", { class: "muted help" }, t("settings.language.help")),
+        ),
+        el("div", { class: "row-control" }, select, rowStatus(key)),
+      ),
     );
   }
 

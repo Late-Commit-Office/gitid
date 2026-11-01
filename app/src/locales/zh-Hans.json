@@ -1,0 +1,27 @@
+{
+  "app.title": "gitid",
+  "app.views": "视图",
+  "app.git.looking": "正在查找 git…",
+  "app.git.version": "git {version}",
+  "app.git.notFound": "未找到 git",
+
+  "tab.identity": "身份",
+  "tab.scan": "扫描",
+  "tab.rules": "规则",
+  "tab.scopes": "全部配置",
+  "tab.settings": "设置",
+
+  "noGit.lede": "gitid 需要 git，但未能找到它。",
+  "noGit.body": "请从 git-scm.com 安装 git（在 Mac 上也可以运行 {command}），然后重新打开 gitid；或者告诉 gitid git 在哪里。",
+  "noGit.choose": "选择 git 的位置",
+
+  "copy.button": "复制",
+  "copy.title": "复制到剪贴板",
+  "copy.done": "已复制",
+  "copy.failed": "请选中后复制",
+
+  "settings.language.title": "界面语言",
+  "settings.language.label": "显示语言",
+  "settings.language.help": "gitid 自身界面使用的语言。git 的消息和您的配置按原样显示。",
+  "settings.language.system": "跟随系统（{language}）"
+}
