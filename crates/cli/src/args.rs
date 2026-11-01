@@ -139,6 +139,10 @@ pub struct AddArgs {
     /// Also check the rule against this repo afterwards (repeatable)
     #[arg(long, value_name = "PATH")]
     pub check: Vec<PathBuf>,
+    /// Replace the rule's folders, servers, name and email with exactly these,
+    /// instead of adding to them
+    #[arg(long)]
+    pub replace: bool,
 }
 
 /// Which config file `set`/`unset` write to. At most one may be given.

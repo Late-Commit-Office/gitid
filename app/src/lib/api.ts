@@ -1,7 +1,16 @@
 // Typed wrappers around the Rust commands. Nothing else calls invoke().
 
 import { invoke } from "@tauri-apps/api/core";
-import type { CommandError, GitInfo, IdentityView, SettingsView } from "./types";
+import type {
+  CommandError,
+  GitInfo,
+  IdentityView,
+  RuleCheck,
+  RuleInput,
+  RulesView,
+  SaveRuleResult,
+  SettingsView,
+} from "./types";
 
 export class AppError extends Error {
   constructor(
@@ -38,4 +47,9 @@ export const api = {
   /** null: find git automatically again. */
   setGitPath: (path: string | null) => call<SettingsView>("set_git_path", { path }),
   pickGitExecutable: () => call<string | null>("pick_git_executable"),
+
+  rules: () => call<RulesView>("list_rules"),
+  saveRule: (input: RuleInput) => call<SaveRuleResult>("save_rule", { input }),
+  removeRule: (id: string, deleteFile: boolean) => call<RulesView>("remove_rule", { id, deleteFile }),
+  checkRule: (id: string, path: string) => call<RuleCheck>("check_rule", { id, path }),
 };

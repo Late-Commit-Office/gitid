@@ -8,6 +8,7 @@
 //! goes through git.
 
 mod commands;
+mod rule_commands;
 mod state;
 
 use tauri::Manager;
@@ -33,6 +34,10 @@ fn main() {
             commands::set_setting,
             commands::set_git_path,
             commands::pick_git_executable,
+            rule_commands::list_rules,
+            rule_commands::save_rule,
+            rule_commands::remove_rule,
+            rule_commands::check_rule,
         ])
         .run(tauri::generate_context!())
         .expect("error while running gitid");

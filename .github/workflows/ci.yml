@@ -101,7 +101,9 @@ jobs:
       - run: npm run typecheck
       # Builds app/dist, which the Rust side embeds; clippy needs it to exist.
       - run: npm run build
-      - run: cargo clippy -p gitid-app -- -D warnings
+      - run: cargo clippy -p gitid-app --all-targets -- -D warnings
+      # The app's own tests (the JSON the rule form sends and receives).
+      - run: cargo test -p gitid-app
       - name: Build app
         run: npm run tauri build -- --ci --bundles ${{ matrix.bundles }}
 

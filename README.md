@@ -4,7 +4,7 @@
 
 See which git identity applies to any folder, and why, so commits never fall back to your OS login name again.
 
-Status: **step 4 in progress** — the `gitid` CLI explains the effective identity, edits config, and manages per-folder and per-server identity rules. The desktop app shows the identity for any folder and edits your global settings; rules, scopes and a repo scanner are next.
+Status: **step 4 in progress** — the `gitid` CLI explains the effective identity, edits config, and manages per-folder and per-server identity rules. The desktop app shows the identity for any folder, manages identity rules, and edits your global settings; scopes and a repo scanner are next.
 
 ## The desktop app
 
@@ -18,6 +18,7 @@ npm run tauri build          # installable bundle in target/release/bundle/
 ```
 
 - **Identity:** pick a folder to see who commits there will be from, which file (or rule, or environment variable) each value comes from, and a button to fix each problem.
+- **Rules:** add, edit and remove identities for folders (`~/work`) or servers (your Gitea). Saving checks the rule against repos in its folders; "Check a folder" tests any repo. Rules written by hand are listed and can be removed, but not edited.
 - **Settings:** your default name and email, "never guess my identity" (`user.useConfigOnly`), default branch, pull behavior, editor, commit signing, and which git the app uses. Changes go to your global git config; the app's own choice of git is saved separately in its config folder.
 
 ## Try it
@@ -55,7 +56,7 @@ gitid rule check gitea ~/code/blog      # does it apply there?
 gitid rule remove work                  # also deletes its identity file
 ```
 
-`rule add` checks the new rule against real repos (inside `--dir`, plus any `--check` folders) and says where it does and doesn't apply. Running it again with the same id updates that rule. `gitid whoami` labels values that come from a rule.
+`rule add` checks the new rule against real repos (inside `--dir`, plus any `--check` folders) and says where it does and doesn't apply. Running it again with the same id adds to that rule; with `--replace` the rule becomes exactly what you pass (folders, servers, name and email), like editing it in the app. `gitid whoami` labels values that come from a rule.
 
 `gitid whoami`, `rule add` and `rule check` exit with **3** when something is wrong (identity missing or guessed, rule not applying), so they can guard scripts or a pre-commit hook.
 
@@ -75,8 +76,8 @@ crates/core    gitid-core: all logic, no UI
 crates/cli     gitid binary (clap)
 app/           desktop app frontend: plain TypeScript, built with Vite
   src/lib/     api.ts (typed calls to Rust), types.ts (the JSON shapes), dom.ts, paths.ts, recent.ts
-  src/views/   identity.ts, settings.ts
-app/src-tauri/ desktop app backend: commands.rs (the only calls the UI can make), state.rs (which git; saved settings.json)
+  src/views/   identity.ts, rules.ts, settings.ts
+app/src-tauri/ desktop app backend: commands.rs and rule_commands.rs (the only calls the UI can make), state.rs (which git; saved settings.json)
 ```
 
 The app's webview gets no plugin permissions: it can only call gitid's own commands, and even the folder picker is opened from Rust. Text from config is only ever inserted as text, never as HTML.

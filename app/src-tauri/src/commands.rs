@@ -52,10 +52,10 @@ impl From<tauri::Error> for CommandError {
     }
 }
 
-type CmdResult<T> = Result<T, CommandError>;
+pub(crate) type CmdResult<T> = Result<T, CommandError>;
 
 /// Run blocking git work off the async runtime's worker threads.
-async fn blocking<T: Send + 'static>(
+pub(crate) async fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> CmdResult<T> + Send + 'static,
 ) -> CmdResult<T> {
     tauri::async_runtime::spawn_blocking(f)

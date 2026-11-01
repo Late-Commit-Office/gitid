@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use gitid_core::rules::{self, Condition, NewRule, Rule, When};
-use gitid_core::{paths, Error, GitVersion, Result, SystemGit};
+use gitid_core::{paths, Error, Git, GitVersion, Result, SystemGit};
 
 use crate::args::AddArgs;
 use crate::style;
@@ -87,7 +87,13 @@ pub fn add(git: &SystemGit, version: GitVersion, a: &AddArgs) -> Result<u8> {
     }));
     when.extend(remotes.iter().map(|p| When::RemotePattern(p.clone())));
 
-    let rule = rules::add_rule(
+    type Save = fn(&dyn Git, GitVersion, &NewRule) -> Result<Rule>;
+    let save: Save = if a.replace {
+        rules::replace_rule
+    } else {
+        rules::add_rule
+    };
+    let rule = save(
         git,
         version,
         &NewRule {
@@ -105,7 +111,8 @@ pub fn add(git: &SystemGit, version: GitVersion, a: &AddArgs) -> Result<u8> {
     // directly inside each --dir (folder rules can be checked without asking).
     let mut targets: Vec<PathBuf> = checks.iter().map(|p| real(p)).collect();
     for d in dirs {
-        targets.extend(repos_in(&real(d)));
+        // A sample is enough to prove the rule matches.
+        targets.extend(rules::sample_repos(&real(d), 10));
     }
     if targets.is_empty() {
         if !hosts.is_empty() || !remotes.is_empty() {
@@ -139,26 +146,6 @@ pub fn add(git: &SystemGit, version: GitVersion, a: &AddArgs) -> Result<u8> {
         return Ok(EXIT_PROBLEMS);
     }
     Ok(EXIT_OK)
-}
-
-/// The folder itself (if it is a repo) and repos one level below it.
-fn repos_in(dir: &Path) -> Vec<PathBuf> {
-    let is_repo = |p: &Path| p.join(".git").exists();
-    let mut out = Vec::new();
-    if is_repo(dir) {
-        out.push(dir.to_path_buf());
-    }
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        let mut found: Vec<PathBuf> = entries
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| p.is_dir() && is_repo(p))
-            .collect();
-        found.sort();
-        // A sample is enough to prove the rule matches.
-        out.extend(found.into_iter().take(10));
-    }
-    out
 }
 
 fn lookup(git: &SystemGit, id: &str) -> Result<Rule> {

@@ -227,6 +227,10 @@ button:focus-visible {
   border-color: var(--problem);
 }
 
+.verdict.note {
+  border-color: var(--note);
+}
+
 .verdict .lede {
   font-size: 0.95rem;
 }
@@ -439,6 +443,12 @@ button:focus-visible {
   min-width: 0;
 }
 
+/* A lone text input in a form row fills the width (not the height). */
+.row-control > input[type="text"] {
+  flex: none;
+  width: 100%;
+}
+
 .row-bool .row-control,
 .row-choice .row-control {
   justify-content: center;
@@ -469,6 +479,11 @@ select {
 
 input[type="text"] {
   flex: 1;
+}
+
+input[type="text"][readonly] {
+  background: transparent;
+  color: var(--muted);
 }
 
 input[type="text"].mono {
@@ -550,6 +565,199 @@ button.link {
 
 .fix-note {
   font-size: 0.8rem;
+}
+
+/* ---------------------------------------------------------------- rules */
+
+.rules-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.rules-head .intro {
+  margin: 0;
+}
+
+.rules-head button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.rule-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.rule {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.rule-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "id actions" "who actions";
+  column-gap: 1rem;
+  align-items: start;
+}
+
+.rule-id {
+  grid-area: id;
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* The identity a rule gives is the point, so it reads like the verdict line. */
+.rule-who {
+  grid-area: who;
+  font-size: 1.05rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.rule-who .muted {
+  font-family: var(--ui);
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+
+.rule-actions {
+  grid-area: actions;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.rule-when {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+.rule-when li::before {
+  content: "";
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--ok);
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+.rule-file {
+  font-size: 0.8rem;
+  margin-top: 0.4rem;
+  overflow-wrap: anywhere;
+}
+
+.rule-check {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: baseline;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.ok-text {
+  color: var(--ok);
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  background: var(--problem-wash);
+}
+
+.confirm p {
+  flex: 1 1 16rem;
+}
+
+button.danger {
+  background: var(--problem);
+  border-color: var(--problem);
+  color: var(--surface);
+  font-weight: 600;
+}
+
+.check-list {
+  list-style: none;
+  margin: 0.35rem 0;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+.form-title {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.rule-form .row:first-of-type {
+  border-top: 1px solid var(--rule);
+}
+
+.rule-form .group {
+  margin-top: 1.75rem;
+  margin-bottom: 1rem;
+}
+
+.conditions {
+  margin-top: 0.75rem;
+}
+
+.condition {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.condition input[type="text"] {
+  flex: 1 1 12rem;
+}
+
+.condition input.port {
+  flex: 0 0 4.5rem;
+  margin-left: 0.35rem;
+}
+
+.port-label {
+  display: flex;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.raw {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+.add-condition {
+  margin-top: 0.6rem;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.form-actions .status {
+  flex-basis: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {

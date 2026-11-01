@@ -1,12 +1,13 @@
-// App shell: finds git, then shows the Identity or Settings view.
+// App shell: finds git, then shows the Identity, Rules or Settings view.
 
 import { api } from "./lib/api";
 import { append, clear, el } from "./lib/dom";
 import { setHome } from "./lib/paths";
 import { mountIdentityView } from "./views/identity";
+import { mountRulesView } from "./views/rules";
 import { mountSettingsView } from "./views/settings";
 
-type ViewName = "identity" | "settings";
+type ViewName = "identity" | "rules" | "settings";
 
 const root = document.getElementById("app");
 if (root) void start(root);
@@ -39,6 +40,7 @@ async function start(root: HTMLElement): Promise<void> {
     clear(tabs);
     for (const [name, label] of [
       ["identity", "Identity"],
+      ["rules", "Rules"],
       ["settings", "Settings"],
     ] as [ViewName, string][]) {
       append(
@@ -57,12 +59,14 @@ async function start(root: HTMLElement): Promise<void> {
     }
 
     clear(content);
-    if (view === "identity" && !gitOk) {
+    if (view !== "settings" && !gitOk) {
       append(content, noGit(() => show("settings")));
       return;
     }
     if (view === "identity") {
       mountIdentityView(content, { openSettings: () => show("settings") });
+    } else if (view === "rules") {
+      mountRulesView(content);
     } else {
       mountSettingsView(content, {
         onGitChanged: () => void refreshGit(),

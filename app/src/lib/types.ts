@@ -133,3 +133,54 @@ export interface SettingsView {
   /** Empty when no working git was found. */
   settings: SettingValue[];
 }
+
+// ---------------------------------------------------------------- rules
+
+export type Condition =
+  | { kind: "folder"; pattern: string; caseInsensitive: boolean }
+  | { kind: "remoteUrl"; pattern: string }
+  | { kind: "other"; raw: string };
+
+/** One "applies to" line of the rule form; sent back unchanged when saving. */
+export type When =
+  | { kind: "folder"; path: string }
+  | { kind: "remoteHost"; host: string; sshPort: number | null }
+  | { kind: "remotePattern"; pattern: string }
+  | { kind: "raw"; raw: string };
+
+export interface RuleView {
+  id: string;
+  includePath: string;
+  file: string;
+  fileExists: boolean;
+  conditions: Condition[];
+  name: string | null;
+  email: string | null;
+  /** Created by gitid; others can be removed but not edited. */
+  managed: boolean;
+  description: string[];
+  when: When[];
+}
+
+export interface RulesView {
+  rules: RuleView[];
+  supportsHasconfig: boolean;
+}
+
+export interface RuleCheck {
+  path: string;
+  applies: boolean;
+}
+
+export interface SaveRuleResult {
+  rule: RuleView;
+  checks: RuleCheck[];
+}
+
+export interface RuleInput {
+  id: string;
+  name: string | null;
+  email: string | null;
+  when: When[];
+  replace: boolean;
+}

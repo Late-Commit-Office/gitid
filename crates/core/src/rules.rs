@@ -123,6 +123,9 @@ pub enum When {
     RemoteHost { host: String, ssh_port: Option<u16> },
     /// A raw `hasconfig:remote.*.url:` glob, for anything the host form misses.
     RemotePattern(String),
+    /// Any condition, written exactly as given. Used to keep conditions gitid
+    /// can't express as a folder or server (e.g. `onbranch:`) when editing.
+    Raw(Condition),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -272,6 +275,12 @@ pub fn conditions_for(when: &When, home: Option<&Path>) -> Result<Vec<Condition>
                 pattern: p.to_string(),
             }])
         }
+        When::Raw(c) => {
+            if c.raw().trim().is_empty() {
+                return Err(Error::InvalidInput("condition is empty".into()));
+            }
+            Ok(vec![c.clone()])
+        }
     }
 }
 
@@ -345,6 +354,26 @@ fn check_identity(name: Option<&str>, email: Option<&str>) -> Result<()> {
 /// updates) its identity file, then adds any `includeIf` entries not already
 /// present. Returns the rule as git now sees it.
 pub fn add_rule(git: &dyn Git, version: GitVersion, new: &NewRule) -> Result<Rule> {
+    save_rule(git, version, new, false)
+}
+
+/// Make the rule with this id match exactly `new`: conditions it no longer
+/// lists are removed, and a name or email left out is removed from its
+/// identity file. Creates the rule if it doesn't exist. This is what editing
+/// a rule does.
+pub fn replace_rule(git: &dyn Git, version: GitVersion, new: &NewRule) -> Result<Rule> {
+    save_rule(git, version, new, true)
+}
+
+fn needs_hasconfig(w: &When) -> bool {
+    match w {
+        When::Folder(_) => false,
+        When::RemoteHost { .. } | When::RemotePattern(_) => true,
+        When::Raw(c) => matches!(c, Condition::RemoteUrl { .. }),
+    }
+}
+
+fn save_rule(git: &dyn Git, version: GitVersion, new: &NewRule, replace: bool) -> Result<Rule> {
     check_id(&new.id)?;
     check_identity(new.name.as_deref(), new.email.as_deref())?;
     if new.when.is_empty() {
@@ -352,8 +381,7 @@ pub fn add_rule(git: &dyn Git, version: GitVersion, new: &NewRule) -> Result<Rul
             "a rule needs at least one folder or server".into(),
         ));
     }
-    let remote = new.when.iter().any(|w| !matches!(w, When::Folder(_)));
-    if remote && !version.supports_hasconfig() {
+    if new.when.iter().any(needs_hasconfig) && !version.supports_hasconfig() {
         return Err(Error::Unsupported {
             feature: "matching repos by remote server",
             needs: GitVersion::new(2, 36, 0),
@@ -375,20 +403,30 @@ pub fn add_rule(git: &dyn Git, version: GitVersion, new: &NewRule) -> Result<Rul
         }
     }
 
+    let dir = home.join(IDENTITIES_DIR);
+    let file = dir.join(format!("{}.gitconfig", new.id));
+    let previous = if replace {
+        let file = paths::simplify(file.clone());
+        list_rules(git)?.into_iter().find(|r| r.file == file)
+    } else {
+        None
+    };
+
     // 1. The identity file. Written before the includes, so an include never
     //    points at a missing file.
-    let dir = home.join(IDENTITIES_DIR);
     std::fs::create_dir_all(&dir).map_err(|source| Error::Io {
         path: dir.clone(),
         source,
     })?;
-    let file = dir.join(format!("{}.gitconfig", new.id));
     let target = Target::File(file.clone());
-    if let Some(name) = &new.name {
-        config::set(git, &target, "user.name", name)?;
-    }
-    if let Some(email) = &new.email {
-        config::set(git, &target, "user.email", email)?;
+    for (key, value) in [("user.name", &new.name), ("user.email", &new.email)] {
+        match value {
+            Some(v) => config::set(git, &target, key, v)?,
+            None if replace => {
+                config::unset_all(git, &target, key)?;
+            }
+            None => {}
+        }
     }
 
     // 2. The includes, skipping exact duplicates.
@@ -401,6 +439,13 @@ pub fn add_rule(git: &dyn Git, version: GitVersion, new: &NewRule) -> Result<Rul
             .any(|e| e.key == key && e.value.as_deref() == Some(include_path.as_str()));
         if !present {
             config::add(git, &Target::Global, &c.key(), &include_path)?;
+        }
+    }
+
+    // 3. When editing, drop the conditions the rule no longer has.
+    if let Some(prev) = previous {
+        for c in prev.conditions.iter().filter(|c| !conditions.contains(c)) {
+            config::unset_value(git, &Target::Global, &c.key(), &prev.include_path)?;
         }
     }
 
@@ -427,10 +472,19 @@ pub fn remove_rule(git: &dyn Git, rule: &Rule, delete_file: bool) -> Result<()> 
     Ok(())
 }
 
-/// Human-readable lines for a rule's conditions. The set of patterns that
-/// [`When::RemoteHost`] writes collapses back into one "server ..." line;
-/// anything else is listed as-is.
-pub fn describe(conditions: &[Condition]) -> Vec<String> {
+/// A rule's conditions as a person thinks of them: the set of patterns that
+/// [`When::RemoteHost`] writes counts as one server; anything else is itself.
+enum Grouped<'a> {
+    Host {
+        web: String,
+        ssh_port: Option<String>,
+    },
+    One(&'a Condition),
+}
+
+/// Group conditions, in the order they first appear. Two passes, so a
+/// hand-edited config with the patterns in an unusual order still groups.
+fn group(conditions: &[Condition]) -> Vec<Grouped<'_>> {
     let remote: Vec<&str> = conditions
         .iter()
         .filter_map(|c| match c {
@@ -438,53 +492,142 @@ pub fn describe(conditions: &[Condition]) -> Vec<String> {
             _ => None,
         })
         .collect();
-    let mut used: Vec<&str> = Vec::new();
-    let mut out = Vec::new();
 
-    for c in conditions {
-        match c {
-            Condition::RemoteUrl { pattern } => {
-                if used.contains(&pattern.as_str()) {
-                    continue;
-                }
-                let web = pattern
-                    .strip_prefix("http*://")
-                    .and_then(|p| p.strip_suffix("/**"));
-                let Some(web) = web.filter(|w| !w.starts_with("*@")) else {
-                    continue; // printed below unless claimed by a host group
-                };
-                let bare = web.split(':').next().unwrap_or(web);
-                let set = [
-                    format!("http*://{web}/**"),
-                    format!("http*://*@{web}/**"),
-                    format!("ssh://*@{bare}/**"),
-                    format!("*@{bare}:*/**"),
-                ];
-                if set.iter().all(|p| remote.contains(&p.as_str())) {
-                    let mut line = format!("repos with a remote on {web} (https, http or ssh)");
-                    let ssh_prefix = format!("ssh://*@{bare}:");
-                    for p in &remote {
-                        if let Some(port) = p
-                            .strip_prefix(ssh_prefix.as_str())
-                            .and_then(|r| r.strip_suffix("/**"))
-                        {
-                            line.push_str(&format!(", ssh port {port}"));
-                            used.push(p);
-                        }
-                    }
-                    used.extend(remote.iter().filter(|p| set.iter().any(|s| s == *p)));
-                    out.push(line);
-                }
-            }
-            other => out.push(other.to_string()),
-        }
+    // Pass 1: complete host sets, and every pattern each one claims.
+    struct HostSet {
+        web: String,
+        ssh_port: Option<String>,
+        claimed: Vec<String>,
     }
+    let mut sets: Vec<HostSet> = Vec::new();
+    for p in &remote {
+        let Some(web) = p
+            .strip_prefix("http*://")
+            .and_then(|r| r.strip_suffix("/**"))
+        else {
+            continue;
+        };
+        if web.starts_with("*@") || sets.iter().any(|h| h.web == web) {
+            continue;
+        }
+        let bare = web.split(':').next().unwrap_or(web);
+        let mut claimed = vec![
+            format!("http*://{web}/**"),
+            format!("http*://*@{web}/**"),
+            format!("ssh://*@{bare}/**"),
+            format!("*@{bare}:*/**"),
+        ];
+        if !claimed.iter().all(|c| remote.contains(&c.as_str())) {
+            continue;
+        }
+        let ssh_prefix = format!("ssh://*@{bare}:");
+        let ssh_port = remote.iter().find_map(|r| {
+            r.strip_prefix(ssh_prefix.as_str())
+                .and_then(|rest| rest.strip_suffix("/**"))
+                .filter(|port| port.chars().all(|ch| ch.is_ascii_digit()))
+                .map(str::to_string)
+        });
+        if let Some(port) = &ssh_port {
+            claimed.push(format!("{ssh_prefix}{port}/**"));
+        }
+        sets.push(HostSet {
+            web: web.to_string(),
+            ssh_port,
+            claimed,
+        });
+    }
+
+    // Pass 2: walk in order; a host set appears where its first pattern was.
+    let mut emitted = vec![false; sets.len()];
+    let mut out = Vec::new();
     for c in conditions {
         if let Condition::RemoteUrl { pattern } = c {
-            if !used.contains(&pattern.as_str()) {
-                out.push(c.to_string());
+            if let Some(i) = sets.iter().position(|h| h.claimed.contains(pattern)) {
+                if !emitted[i] {
+                    emitted[i] = true;
+                    out.push(Grouped::Host {
+                        web: sets[i].web.clone(),
+                        ssh_port: sets[i].ssh_port.clone(),
+                    });
+                }
+                continue;
             }
         }
+        out.push(Grouped::One(c));
+    }
+    out
+}
+
+/// Human-readable lines for a rule's conditions, one per folder or server.
+pub fn describe(conditions: &[Condition]) -> Vec<String> {
+    group(conditions)
+        .into_iter()
+        .map(|g| match g {
+            Grouped::Host { web, ssh_port } => {
+                let mut line = format!("repos with a remote on {web} (https, http or ssh)");
+                if let Some(port) = ssh_port {
+                    line.push_str(&format!(", ssh port {port}"));
+                }
+                line
+            }
+            Grouped::One(c) => c.to_string(),
+        })
+        .collect()
+}
+
+/// Turn a rule's conditions back into the inputs that would recreate it,
+/// for editing. Folder patterns that are plain folders become folders;
+/// complete host sets become servers; anything else is kept as written.
+pub fn when_from(rule: &Rule, home: Option<&Path>) -> Vec<When> {
+    group(&rule.conditions)
+        .into_iter()
+        .map(|g| match g {
+            Grouped::Host { web, ssh_port } => When::RemoteHost {
+                host: web,
+                ssh_port: ssh_port.and_then(|p| p.parse().ok()),
+            },
+            Grouped::One(c @ Condition::Folder { pattern, .. }) => {
+                folder_of(pattern, home).map_or_else(|| When::Raw(c.clone()), When::Folder)
+            }
+            Grouped::One(Condition::RemoteUrl { pattern }) => When::RemotePattern(pattern.clone()),
+            Grouped::One(c) => When::Raw(c.clone()),
+        })
+        .collect()
+}
+
+/// `~/work/` or `/srv/code/` -> a folder. Patterns with wildcards, or relative
+/// ones (git matches those anywhere), stay patterns.
+fn folder_of(pattern: &str, home: Option<&Path>) -> Option<PathBuf> {
+    let p = pattern.strip_suffix('/')?;
+    if p.contains(['*', '?', '[']) {
+        return None;
+    }
+    if p == "~" {
+        return home.map(Path::to_path_buf);
+    }
+    if let Some(rest) = p.strip_prefix("~/") {
+        return home.map(|h| h.join(rest));
+    }
+    let path = PathBuf::from(p);
+    (path.is_absolute() || p.starts_with('/')).then_some(path)
+}
+
+/// Repos to check a folder rule against: the folder itself if it is a repo,
+/// and repos directly inside it (sorted, at most `limit`).
+pub fn sample_repos(dir: &Path, limit: usize) -> Vec<PathBuf> {
+    let is_repo = |p: &Path| p.join(".git").exists();
+    let mut out = Vec::new();
+    if is_repo(dir) {
+        out.push(dir.to_path_buf());
+    }
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        let mut found: Vec<PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_dir() && is_repo(p))
+            .collect();
+        found.sort();
+        out.extend(found.into_iter().take(limit));
     }
     out
 }
@@ -569,6 +712,86 @@ mod tests {
         // A partial set is shown pattern by pattern.
         let partial = vec![Condition::parse("hasconfig:remote.*.url:http*://h/**")];
         assert_eq!(describe(&partial), ["remote URL matches http*://h/**"]);
+    }
+
+    #[test]
+    fn grouping_survives_unusual_order() {
+        // Hand-edited: the ssh-port pattern first, the http pattern last.
+        let raw = [
+            "hasconfig:remote.*.url:ssh://*@g.example:2222/**",
+            "hasconfig:remote.*.url:*@g.example:*/**",
+            "gitdir:~/work/",
+            "hasconfig:remote.*.url:ssh://*@g.example/**",
+            "hasconfig:remote.*.url:http*://*@g.example/**",
+            "hasconfig:remote.*.url:http*://g.example/**",
+        ];
+        let c: Vec<Condition> = raw.iter().map(|r| Condition::parse(r)).collect();
+        assert_eq!(
+            describe(&c),
+            [
+                "repos with a remote on g.example (https, http or ssh), ssh port 2222",
+                "repos under ~/work/",
+            ]
+        );
+    }
+
+    #[test]
+    fn folder_patterns_back_to_folders() {
+        let home = Path::new("/home/ann");
+        assert_eq!(
+            folder_of("~/work/", Some(home)),
+            Some(PathBuf::from("/home/ann/work"))
+        );
+        assert_eq!(
+            folder_of("~/", Some(home)),
+            Some(PathBuf::from("/home/ann"))
+        );
+        assert_eq!(
+            folder_of("/srv/code/", Some(home)),
+            Some(PathBuf::from("/srv/code"))
+        );
+        assert_eq!(folder_of("~/work/**/x/", Some(home)), None);
+        assert_eq!(folder_of("work/", Some(home)), None); // relative: git matches it anywhere
+        assert_eq!(folder_of("/srv/code", Some(home)), None); // no trailing slash: exact git dir
+    }
+
+    #[test]
+    fn when_from_recovers_inputs() {
+        let mut conditions = conditions_for(
+            &When::RemoteHost {
+                host: "g.example:3000".into(),
+                ssh_port: Some(2222),
+            },
+            None,
+        )
+        .unwrap();
+        conditions.insert(0, Condition::parse("gitdir/i:~/work/"));
+        conditions.push(Condition::parse("hasconfig:remote.*.url:https://other/**"));
+        conditions.push(Condition::parse("onbranch:release"));
+        conditions.push(Condition::parse("gitdir:~/a/**/b/"));
+        let rule = Rule {
+            id: "x".into(),
+            include_path: String::new(),
+            file: PathBuf::new(),
+            file_exists: true,
+            conditions,
+            name: None,
+            email: None,
+            managed: true,
+        };
+        assert_eq!(
+            when_from(&rule, Some(Path::new("/home/ann"))),
+            [
+                When::Folder(PathBuf::from("/home/ann/work")),
+                When::RemoteHost {
+                    host: "g.example:3000".into(),
+                    ssh_port: Some(2222)
+                },
+                When::RemotePattern("https://other/**".into()),
+                When::Raw(Condition::parse("onbranch:release")),
+                When::Raw(Condition::parse("gitdir:~/a/**/b/")),
+            ]
+        );
     }
 
     #[test]

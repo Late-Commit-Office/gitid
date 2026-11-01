@@ -287,3 +287,125 @@ fn old_git_refuses_remote_rules() {
     .unwrap_err();
     assert!(matches!(err, Error::Unsupported { .. }), "{err:?}");
 }
+
+#[test]
+fn replace_drops_old_conditions_and_cleared_fields() {
+    let t = TestEnv::new("r-replace");
+    base_identity(&t);
+    let work = t.mkdir("home/work");
+    let clients = t.mkdir("home/clients");
+    let in_work = t.init_repo("home/work/api");
+    let in_clients = t.init_repo("home/clients/acme");
+
+    rules::add_rule(
+        t.git(),
+        version(&t),
+        &NewRule {
+            id: "work".into(),
+            name: Some("Ann (work)".into()),
+            email: Some("ann@corp.example".into()),
+            when: vec![When::Folder(work.clone())],
+        },
+    )
+    .unwrap();
+
+    // Edit: move the rule to ~/clients and stop setting the name.
+    let rule = rules::replace_rule(
+        t.git(),
+        version(&t),
+        &NewRule {
+            id: "work".into(),
+            name: None,
+            email: Some("ann@corp.example".into()),
+            when: vec![When::Folder(clients.clone())],
+        },
+    )
+    .unwrap();
+
+    assert_eq!(rule.conditions.len(), 1);
+    assert_eq!(rule.name, None);
+    assert_eq!(
+        email_in(&t, &in_clients).as_deref(),
+        Some("ann@corp.example")
+    );
+    assert_eq!(email_in(&t, &in_work).as_deref(), Some("ann@home.example"));
+    let id = effective_identity(t.git(), &in_clients).unwrap();
+    assert_eq!(
+        id.author.name.unwrap().value,
+        "Ann Lee",
+        "name falls back to global"
+    );
+    let global = std::fs::read_to_string(&t.global).unwrap();
+    assert!(!global.contains("~/work/"), "{global}");
+}
+
+#[test]
+fn editing_without_changes_leaves_config_identical() {
+    let t = TestEnv::new("r-roundtrip");
+    let v = version(&t);
+    base_identity(&t);
+    let work = t.mkdir("home/work");
+    let mut when = vec![When::Folder(work)];
+    if v.supports_hasconfig() {
+        when.push(When::RemoteHost {
+            host: "g.example".into(),
+            ssh_port: Some(2222),
+        });
+        when.push(When::RemotePattern("https://other.example/team/**".into()));
+    }
+    let rule = rules::add_rule(
+        t.git(),
+        v,
+        &NewRule {
+            id: "mix".into(),
+            name: Some("Ann".into()),
+            email: Some("a@b.example".into()),
+            when,
+        },
+    )
+    .unwrap();
+    // Hand-added condition gitid has no form for: must survive an edit.
+    t.sh(
+        None,
+        &[
+            "config",
+            "--global",
+            "--add",
+            "includeIf.onbranch:release.path",
+            &rule.include_path,
+        ],
+    );
+    let rule = rules::find(&rules::list_rules(t.git()).unwrap(), "mix")
+        .unwrap()
+        .clone();
+
+    let before = std::fs::read_to_string(&t.global).unwrap();
+    let home = gitid_core::platform::home_dir(t.git());
+    let recovered = rules::when_from(&rule, home.as_deref());
+    let again = rules::replace_rule(
+        t.git(),
+        v,
+        &NewRule {
+            id: "mix".into(),
+            name: rule.name.clone(),
+            email: rule.email.clone(),
+            when: recovered,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(std::fs::read_to_string(&t.global).unwrap(), before);
+    assert_eq!(again.conditions, rule.conditions);
+}
+
+#[test]
+fn sample_repos_finds_the_folder_and_its_children() {
+    let t = TestEnv::new("r-sample");
+    let code = t.init_repo("code");
+    t.init_repo("code/b");
+    t.init_repo("code/a");
+    t.mkdir("code/not-a-repo");
+    let found = rules::sample_repos(&code, 10);
+    assert_eq!(found, vec![code.clone(), code.join("a"), code.join("b")]);
+    assert_eq!(rules::sample_repos(&code, 1).len(), 2);
+}
