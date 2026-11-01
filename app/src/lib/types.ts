@@ -98,3 +98,38 @@ export interface CommandError {
   kind: string;
   message: string;
 }
+
+// ---------------------------------------------------------------- settings
+
+export type SettingKind =
+  | { kind: "bool"; default: boolean }
+  | { kind: "text"; placeholder: string }
+  | { kind: "choice"; choices: { value: string; label: string }[]; default: string };
+
+export type SettingGroup = "identity" | "defaults" | "signing";
+
+export interface SettingValue {
+  key: string;
+  label: string;
+  help: string;
+  group: SettingGroup;
+  kind: SettingKind;
+  /** null when the global config doesn't set it (git's default applies). */
+  value: string | null;
+  origin: Origin | null;
+}
+
+export interface GitLocation {
+  /** Chosen in Settings; null means "search for it". */
+  chosen: string | null;
+  path: string | null;
+  version: string | null;
+  error: string | null;
+}
+
+export interface SettingsView {
+  git: GitLocation;
+  globalFile: string | null;
+  /** Empty when no working git was found. */
+  settings: SettingValue[];
+}

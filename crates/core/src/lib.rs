@@ -17,6 +17,7 @@ pub mod platform;
 pub mod repo;
 pub mod rules;
 pub mod secrets;
+pub mod settings;
 
 pub use config::{ConfigSnapshot, Entry, Origin, Scope};
 pub use error::{Error, Result};

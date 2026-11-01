@@ -2,6 +2,7 @@
 
 use gitid_core::config::{self, Target};
 use gitid_core::secrets::mask_value;
+use gitid_core::settings;
 use gitid_core::{paths, Result, SystemGit};
 
 use crate::args::Scope;
@@ -30,6 +31,29 @@ pub fn where_(target: &Target) -> String {
 
 pub fn set(git: &SystemGit, key: &str, value: &str, scope: &Scope) -> Result<u8> {
     let t = target(scope);
+    // Settings gitid manages get the same checks as in the app, and git's
+    // default value removes the line instead of writing it.
+    if let (Target::Global, Some(setting)) = (&t, settings::find(key)) {
+        settings::apply(git, setting.key, Some(value))?;
+        let now = settings::read(git)?
+            .into_iter()
+            .find(|s| s.setting.key == setting.key)
+            .and_then(|s| s.value);
+        match now {
+            Some(v) => println!(
+                "Set {} = {} in {}",
+                setting.key,
+                mask_value(key, &v),
+                where_(&t)
+            ),
+            None => println!(
+                "Set {} back to git's default (removed it from {})",
+                setting.key,
+                where_(&t)
+            ),
+        }
+        return Ok(EXIT_OK);
+    }
     config::set(git, &t, key, value)?;
     println!("Set {key} = {} in {}", mask_value(key, value), where_(&t));
     Ok(EXIT_OK)

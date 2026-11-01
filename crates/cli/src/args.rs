@@ -71,6 +71,12 @@ pub enum Cmd {
         #[command(flatten)]
         scope: ScopeArgs,
     },
+    /// The global settings gitid manages, with their current values
+    Settings {
+        /// Print JSON instead of text
+        #[arg(long)]
+        json: bool,
+    },
     /// A different identity per folder or per server (default: list rules)
     #[command(alias = "rules")]
     Rule {
@@ -258,6 +264,12 @@ mod tests {
 
         assert!(parse(&["set", "x.y", "v", "--global", "--system"]).is_err());
         assert!(parse(&["set", "x.y"]).is_err());
+    }
+
+    #[test]
+    fn settings_command() {
+        assert_eq!(cmd(&["settings"]), Cmd::Settings { json: false });
+        assert_eq!(cmd(&["settings", "--json"]), Cmd::Settings { json: true });
     }
 
     #[test]

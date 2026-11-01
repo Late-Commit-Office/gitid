@@ -1,39 +1,90 @@
-// App shell: finds git, then shows the identity view.
+// App shell: finds git, then shows the Identity or Settings view.
 
-import { api, AppError } from "./lib/api";
-import { append, el } from "./lib/dom";
-import { setHome, tilde } from "./lib/paths";
+import { api } from "./lib/api";
+import { append, clear, el } from "./lib/dom";
+import { setHome } from "./lib/paths";
 import { mountIdentityView } from "./views/identity";
+import { mountSettingsView } from "./views/settings";
 
-async function start(): Promise<void> {
-  const root = document.getElementById("app");
-  if (!root) return;
+type ViewName = "identity" | "settings";
 
+const root = document.getElementById("app");
+if (root) void start(root);
+
+async function start(root: HTMLElement): Promise<void> {
   const status = el("p", { class: "git-status muted" }, "Looking for git…");
-  append(root, el("header", { class: "top" }, el("h1", {}, "gitid"), status));
+  const tabs = el("nav", { class: "tabs", attrs: { "aria-label": "Views" } });
+  const content = el("div", { class: "content" });
+  append(root, el("header", { class: "top" }, el("h1", {}, "gitid"), tabs, status), content);
 
-  try {
-    const git = await api.gitInfo();
-    setHome(git.home);
-    status.textContent = `git ${git.version}, ${tilde(git.path)}`;
-    status.title = git.path;
-  } catch (e) {
-    const err = e instanceof AppError ? e : new AppError("internal", String(e));
-    status.textContent = "git not found";
-    append(
-      root,
-      el(
-        "div",
-        { class: "verdict problem", attrs: { role: "alert" } },
-        el("p", { class: "lede" }, "gitid needs git, and couldn't find it."),
-        el("p", {}, "Install git from git-scm.com (on a Mac, running xcode-select --install also works), then reopen gitid."),
-        el("p", { class: "mono detail" }, err.message),
-      ),
-    );
-    return;
+  let gitOk = false;
+  let current: ViewName = "identity";
+
+  async function refreshGit(): Promise<void> {
+    try {
+      const git = await api.gitInfo();
+      setHome(git.home);
+      status.textContent = `git ${git.version}`;
+      status.title = git.path;
+      gitOk = true;
+    } catch {
+      status.textContent = "git not found";
+      status.removeAttribute("title");
+      gitOk = false;
+    }
   }
 
-  mountIdentityView(root);
+  function show(view: ViewName): void {
+    current = view;
+    clear(tabs);
+    for (const [name, label] of [
+      ["identity", "Identity"],
+      ["settings", "Settings"],
+    ] as [ViewName, string][]) {
+      append(
+        tabs,
+        el(
+          "button",
+          {
+            type: "button",
+            class: "tab",
+            attrs: name === current ? { "aria-current": "page" } : {},
+            on: { click: () => name !== current && show(name) },
+          },
+          label,
+        ),
+      );
+    }
+
+    clear(content);
+    if (view === "identity" && !gitOk) {
+      append(content, noGit(() => show("settings")));
+      return;
+    }
+    if (view === "identity") {
+      mountIdentityView(content, { openSettings: () => show("settings") });
+    } else {
+      mountSettingsView(content, {
+        onGitChanged: () => void refreshGit(),
+      });
+    }
+  }
+
+  await refreshGit();
+  show(gitOk ? "identity" : "settings");
 }
 
-void start();
+function noGit(openSettings: () => void): HTMLElement {
+  return el(
+    "div",
+    { class: "verdict problem", attrs: { role: "alert" } },
+    el("p", { class: "lede" }, "gitid needs git, and couldn't find it."),
+    el(
+      "p",
+      {},
+      "Install git from git-scm.com (on a Mac, running xcode-select --install also works) and reopen gitid, or tell gitid where git is.",
+    ),
+    el("p", {}, el("button", { type: "button", class: "primary", on: { click: openSettings } }, "Choose where git is")),
+  );
+}
+

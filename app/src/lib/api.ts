@@ -1,7 +1,7 @@
 // Typed wrappers around the Rust commands. Nothing else calls invoke().
 
 import { invoke } from "@tauri-apps/api/core";
-import type { CommandError, GitInfo, IdentityView } from "./types";
+import type { CommandError, GitInfo, IdentityView, SettingsView } from "./types";
 
 export class AppError extends Error {
   constructor(
@@ -30,4 +30,12 @@ export const api = {
   identity: (path: string) => call<IdentityView>("get_identity", { path }),
   /** Native folder picker; null if cancelled. */
   pickFolder: () => call<string | null>("pick_folder"),
+
+  settings: () => call<SettingsView>("get_settings"),
+  /** null (or git's default) removes the setting. Returns the updated view. */
+  setSetting: (key: string, value: string | null) =>
+    call<SettingsView>("set_setting", { key, value }),
+  /** null: find git automatically again. */
+  setGitPath: (path: string | null) => call<SettingsView>("set_git_path", { path }),
+  pickGitExecutable: () => call<string | null>("pick_git_executable"),
 };

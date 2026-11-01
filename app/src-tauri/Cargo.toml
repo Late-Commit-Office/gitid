@@ -16,3 +16,4 @@ gitid-core = { workspace = true, features = ["serde"] }
 tauri = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }

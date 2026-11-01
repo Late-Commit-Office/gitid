@@ -3,6 +3,7 @@
 mod args;
 mod edit;
 mod rule;
+mod settings;
 mod show;
 mod style;
 mod whoami;
@@ -45,6 +46,7 @@ fn main() -> ExitCode {
         Cmd::Show { path, key } => show::run(&git, path, key.as_deref()),
         Cmd::Set { key, value, scope } => edit::set(&git, key, value, &scope.scope()),
         Cmd::Unset { key, all, scope } => edit::unset(&git, key, &scope.scope(), *all),
+        Cmd::Settings { json } => settings::list(&git, *json),
         Cmd::Rule { command } => match command {
             None => rule::list(&git, false),
             Some(RuleCmd::List { json }) => rule::list(&git, *json),

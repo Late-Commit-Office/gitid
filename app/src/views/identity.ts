@@ -2,7 +2,7 @@
 // where each value comes from, and what to fix.
 
 import { api, AppError } from "../lib/api";
-import { append, clear, copyButton, el } from "../lib/dom";
+import { append, clear, el } from "../lib/dom";
 import { basename, tilde } from "../lib/paths";
 import { forgetFolder, recentFolders, rememberFolder } from "../lib/recent";
 import type {
@@ -23,8 +23,26 @@ interface State {
   error: AppError | null;
 }
 
-export function mountIdentityView(root: HTMLElement): void {
+export interface IdentityOptions {
+  /** Switch to the Settings view. */
+  openSettings: () => void;
+}
+
+/** What fix buttons can do. */
+interface Actions {
+  openSettings: () => void;
+  turnOnGuard: () => Promise<void>;
+}
+
+export function mountIdentityView(root: HTMLElement, options: IdentityOptions): void {
   const state: State = { folder: null, loading: false, result: null, error: null };
+  const actions: Actions = {
+    openSettings: options.openSettings,
+    turnOnGuard: async () => {
+      await api.setSetting("user.useConfigOnly", "true");
+      if (state.folder) await open(state.folder);
+    },
+  };
   const bar = el("section", { class: "folder-bar", attrs: { "aria-label": "Folder" } });
   const body = el("section", { class: "result", attrs: { "aria-live": "polite" } });
   append(root, bar, body);
@@ -118,7 +136,7 @@ export function mountIdentityView(root: HTMLElement): void {
       append(body, emptyState());
       return;
     }
-    append(body, ...identityPanel(state.result));
+    append(body, ...identityPanel(state.result, actions));
   }
 
   render();
@@ -154,7 +172,7 @@ function errorPanel(e: AppError): HTMLElement {
   );
 }
 
-function identityPanel(v: IdentityView): HTMLElement[] {
+function identityPanel(v: IdentityView, actions: Actions): HTMLElement[] {
   const out: HTMLElement[] = [verdict(v), roleBlock("Author", v.author, v.authorRules)];
   if (sameIdentity(v.author, v.committer)) {
     out.push(el("p", { class: "muted committer-same" }, "The committer is the same as the author."));
@@ -163,8 +181,8 @@ function identityPanel(v: IdentityView): HTMLElement[] {
   }
   const problems = v.warnings.filter((w) => w.severity === "problem");
   const notes = v.warnings.filter((w) => w.severity === "note");
-  if (problems.length) out.push(issues("To fix", problems, "problem", v));
-  if (notes.length) out.push(issues("Worth knowing", notes, "note", v));
+  if (problems.length) out.push(issues("To fix", problems, "problem", v, actions));
+  if (notes.length) out.push(issues("Worth knowing", notes, "note", v, actions));
   out.push(environment(v));
   return out;
 }
@@ -244,40 +262,50 @@ function sourceOf(field: Field, ruleId: string | null): HTMLElement {
   }
 }
 
-const SET_NAME = 'git config --global user.name "Your Name"';
-const SET_EMAIL = "git config --global user.email you@example.com";
-
-function fixFor(w: WarningReport, v: IdentityView): string[] {
+/** A button that fixes the problem, or opens the place to fix it. */
+function fixFor(w: WarningReport, v: IdentityView, actions: Actions): HTMLElement | null {
   const W = w.warning;
+  const settingsButton = (what: string) =>
+    el("button", { type: "button", on: { click: actions.openSettings } }, `Set your ${what} in Settings`);
   switch (W.kind) {
     case "missing": {
-      // Only suggest what is actually missing for that role.
+      // Name only what is actually missing for that role.
       const r = W.role === "author" ? v.author : v.committer;
-      const fixes = [r.name ? null : SET_NAME, r.email ? null : SET_EMAIL].filter((x): x is string => x !== null);
-      return fixes.length ? fixes : [SET_NAME, SET_EMAIL];
+      const parts = [r.name ? null : "name", r.email ? null : "email"].filter((x): x is string => x !== null);
+      return settingsButton(parts.length ? parts.join(" and ") : "name and email");
     }
     case "guessed":
-      return [W.part === "name" ? SET_NAME : SET_EMAIL];
-    case "guessingAllowed":
-      return ["git config --global user.useConfigOnly true"];
+      return settingsButton(W.part);
+    case "guessingAllowed": {
+      const button = el("button", { type: "button" }, "Turn this on");
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try {
+          await actions.turnOnGuard();
+        } catch (e) {
+          button.disabled = false;
+          button.textContent = "Couldn't turn it on";
+          button.title = e instanceof Error ? e.message : String(e);
+        }
+      });
+      return el("span", {}, button, el("span", { class: "muted fix-note" }, " Sets user.useConfigOnly in your global config."));
+    }
     default:
-      return [];
+      return null;
   }
 }
 
-function issues(title: string, list: WarningReport[], tone: "problem" | "note", v: IdentityView): HTMLElement {
+function issues(
+  title: string,
+  list: WarningReport[],
+  tone: "problem" | "note",
+  v: IdentityView,
+  actions: Actions,
+): HTMLElement {
   const ul = el("ul", { class: `issues ${tone}` });
   for (const w of list) {
-    const fixes = fixFor(w, v);
-    append(
-      ul,
-      el(
-        "li",
-        {},
-        el("p", {}, sentence(w.message)),
-        ...fixes.map((cmd) => el("div", { class: "fix" }, el("code", {}, cmd), copyButton(cmd))),
-      ),
-    );
+    const fix = fixFor(w, v, actions);
+    append(ul, el("li", {}, el("p", {}, sentence(w.message)), fix ? el("div", { class: "fix" }, fix) : null));
   }
   return el("section", { class: "issues-block" }, el("h2", {}, title), ul);
 }

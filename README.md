@@ -4,7 +4,7 @@
 
 See which git identity applies to any folder, and why, so commits never fall back to your OS login name again.
 
-Status: **step 3 of 4** — the `gitid` CLI explains the effective identity, edits config, and manages per-folder and per-server identity rules. The desktop app (Tauri) shows the identity for any folder; editing in the app comes in step 4.
+Status: **step 4 in progress** — the `gitid` CLI explains the effective identity, edits config, and manages per-folder and per-server identity rules. The desktop app shows the identity for any folder and edits your global settings; rules, scopes and a repo scanner are next.
 
 ## The desktop app
 
@@ -17,7 +17,8 @@ npm run tauri dev            # run with live reload
 npm run tauri build          # installable bundle in target/release/bundle/
 ```
 
-Pick a folder and the app shows who commits there will be from, which file (or rule, or environment variable) each value comes from, and the git command to fix any problem.
+- **Identity:** pick a folder to see who commits there will be from, which file (or rule, or environment variable) each value comes from, and a button to fix each problem.
+- **Settings:** your default name and email, "never guess my identity" (`user.useConfigOnly`), default branch, pull behavior, editor, commit signing, and which git the app uses. Changes go to your global git config; the app's own choice of git is saved separately in its config folder.
 
 ## Try it
 
@@ -29,7 +30,8 @@ gitid whoami ~/code/app
 gitid show ~/code/app --key user.email  # every value of a key, and which one wins
 gitid whoami --json                     # the same as JSON, for scripts
 
-gitid set user.name "Ann Lee"           # global by default
+gitid settings                          # the settings the app manages, with current values
+gitid set user.name "Ann Lee"           # global by default; managed settings are checked first
 gitid set user.email ann@repo.example --local
 gitid set user.useConfigOnly true       # never let git guess an identity again
 gitid unset user.email --local
@@ -65,6 +67,7 @@ crates/core    gitid-core: all logic, no UI
   config/      model.rs (Scope, Origin, Entry), read.rs (list with origin/scope, per-file reads), write.rs (set/add/unset with an explicit Target)
   repo.rs      repository discovery (work tree, git dir)
   identity.rs  effective author/committer + where each value came from + warnings
+  settings.rs  the global settings gitid manages: labels, help, validation
   rules.rs     identity rules: list, add, remove, check, describe
   platform.rs  home folder, case sensitivity, how paths are written in includeIf
   paths.rs     canonical paths without Windows \\?\ prefixes
@@ -72,8 +75,8 @@ crates/core    gitid-core: all logic, no UI
 crates/cli     gitid binary (clap)
 app/           desktop app frontend: plain TypeScript, built with Vite
   src/lib/     api.ts (typed calls to Rust), types.ts (the JSON shapes), dom.ts, paths.ts, recent.ts
-  src/views/   identity.ts
-app/src-tauri/ desktop app backend: commands.rs (the only calls the UI can make), state.rs
+  src/views/   identity.ts, settings.ts
+app/src-tauri/ desktop app backend: commands.rs (the only calls the UI can make), state.rs (which git; saved settings.json)
 ```
 
 The app's webview gets no plugin permissions: it can only call gitid's own commands, and even the folder picker is opened from Rust. Text from config is only ever inserted as text, never as HTML.

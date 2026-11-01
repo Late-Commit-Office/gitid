@@ -90,7 +90,6 @@ p {
 .top {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: 1rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--rule);
@@ -102,6 +101,35 @@ p {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-left: auto;
+}
+
+/* The current view is marked by an ink underline sitting on the header rule. */
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: 1rem;
+  align-self: flex-end;
+  margin-bottom: calc(-0.75rem - 1px);
+}
+
+.tab {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  padding: 0.35rem 0.6rem 0.6rem;
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+.tab[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+  font-weight: 600;
 }
 
 /* ---------------------------------------------------------------- buttons */
@@ -363,15 +391,183 @@ button:focus-visible {
   max-width: 38rem;
 }
 
+/* ---------------------------------------------------------------- settings */
+
+.intro {
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+.group {
+  margin-bottom: 2rem;
+}
+
+.group h2 {
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 0;
+}
+
+.group-note {
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+}
+
+/* Label and help on the left, the control on the right. */
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 0.4rem 1.5rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.row label {
+  font-weight: 550;
+}
+
+.help {
+  font-size: 0.82rem;
+  margin-top: 0.15rem;
+}
+
+.row-control {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.row-bool .row-control,
+.row-choice .row-control {
+  justify-content: center;
+}
+
+.row-text-wide {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr);
+  border-bottom: none;
+}
+
+.text-row {
+  display: flex;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+input[type="text"],
+select {
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 0.35rem 0.55rem;
+  min-width: 0;
+}
+
+input[type="text"] {
+  flex: 1;
+}
+
+input[type="text"].mono {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+
+input[type="text"]:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* A checkbox drawn as a switch; still a native checkbox for keyboards and screen readers. */
+.switch {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 2.4rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: var(--rule);
+  position: relative;
+  cursor: pointer;
+  margin: 0;
+  transition: background 120ms;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 0.15rem;
+  left: 0.15rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform 120ms;
+}
+
+.switch:checked {
+  background: var(--ok);
+}
+
+.switch:checked::after {
+  transform: translateX(1.05rem);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.status {
+  font-size: 0.8rem;
+  min-height: 1.1em;
+}
+
+.status.ok {
+  color: var(--ok);
+}
+
+.status.bad {
+  color: var(--problem);
+}
+
+button.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--focus);
+  text-decoration: underline;
+  font-size: 0.85rem;
+}
+
+.git-summary {
+  font-size: 0.9rem;
+  margin: 0.6rem 0 0.2rem;
+}
+
+.fix-note {
+  font-size: 0.8rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
   }
 }
 
-@media (max-width: 30rem) {
+@media (max-width: 34rem) {
   #app {
     padding: 1rem;
+  }
+  .row,
+  .row-text-wide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tabs {
+    margin-left: 0.25rem;
   }
   .trail {
     grid-template-columns: 3.5rem minmax(0, 1fr);

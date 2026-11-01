@@ -23,6 +23,34 @@ pub fn home_dir(git: &dyn Git) -> Option<PathBuf> {
     Some(paths::canonicalize(&home).unwrap_or(home))
 }
 
+/// The file `git config --global` writes to, following git's own rule:
+/// `$GIT_CONFIG_GLOBAL` if set; otherwise `~/.gitconfig` if it exists;
+/// otherwise the XDG file (`$XDG_CONFIG_HOME/git/config`, default
+/// `~/.config/git/config`) if that exists; otherwise `~/.gitconfig`.
+pub fn global_config_file(git: &dyn Git) -> Option<PathBuf> {
+    let var = |name| {
+        git.env_var(name)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    };
+    if let Some(p) = var("GIT_CONFIG_GLOBAL") {
+        return Some(p);
+    }
+    let home = home_dir(git)?;
+    let dotfile = home.join(".gitconfig");
+    if dotfile.exists() {
+        return Some(dotfile);
+    }
+    let xdg = var("XDG_CONFIG_HOME")
+        .unwrap_or_else(|| home.join(".config"))
+        .join("git")
+        .join("config");
+    if xdg.exists() {
+        return Some(xdg);
+    }
+    Some(dotfile)
+}
+
 /// Windows and (by default) macOS treat `Work` and `work` as the same folder,
 /// so folder rules must match case-insensitively there or they silently fail.
 pub fn case_insensitive_fs() -> bool {

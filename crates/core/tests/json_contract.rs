@@ -138,3 +138,43 @@ fn rule_and_condition_shape() {
         json!({ "kind": "remoteUrl", "pattern": "https://h/**" })
     );
 }
+
+#[test]
+fn settings_shape() {
+    let t = TestEnv::new("json-settings");
+    t.global_set("user.name", "Ann Lee");
+    t.global_set("pull.rebase", "true");
+    let all = gitid_core::settings::read(t.git()).unwrap();
+    let v = serde_json::to_value(&all).unwrap();
+
+    let find = |key: &str| {
+        v.as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["key"] == key)
+            .unwrap_or_else(|| panic!("no {key} in {v:#}"))
+            .clone()
+    };
+    let name = find("user.name");
+    assert_eq!(name["label"], "Name");
+    assert_eq!(name["group"], "identity");
+    assert_eq!(name["kind"]["kind"], "text");
+    assert!(name["kind"]["placeholder"].is_string());
+    assert_eq!(name["value"], "Ann Lee");
+    assert_eq!(name["origin"]["kind"], "file");
+
+    let guard = find("user.useConfigOnly");
+    assert_eq!(guard["kind"], json!({ "kind": "bool", "default": false }));
+    assert_eq!(guard["value"], Value::Null);
+    assert_eq!(guard["origin"], Value::Null);
+
+    let pull = find("pull.rebase");
+    assert_eq!(pull["kind"]["kind"], "choice");
+    assert_eq!(pull["kind"]["default"], "false");
+    assert_eq!(
+        pull["kind"]["choices"][0],
+        json!({ "value": "false", "label": "Merge" })
+    );
+    assert_eq!(pull["value"], "true");
+    assert_eq!(pull["group"], "defaults");
+}

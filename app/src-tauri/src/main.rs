@@ -10,16 +10,29 @@
 mod commands;
 mod state;
 
+use tauri::Manager;
+
 fn main() {
     tauri::Builder::default()
         // Registered so Rust can show the native folder picker. The webview is
         // granted no dialog permissions (see capabilities/default.json).
         .plugin(tauri_plugin_dialog::init())
         .manage(state::AppState::default())
+        .setup(|app| {
+            // The app's own settings (which git to use) live in its config folder.
+            let dir = app.path().app_config_dir()?;
+            app.state::<state::AppState>()
+                .load(dir.join("settings.json"));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::git_info,
             commands::get_identity,
             commands::pick_folder,
+            commands::get_settings,
+            commands::set_setting,
+            commands::set_git_path,
+            commands::pick_git_executable,
         ])
         .run(tauri::generate_context!())
         .expect("error while running gitid");
