@@ -178,3 +178,23 @@ fn settings_shape() {
     assert_eq!(pull["value"], "true");
     assert_eq!(pull["group"], "defaults");
 }
+
+#[test]
+fn layers_shape() {
+    use gitid_core::config::{layers, read_all};
+    let t = TestEnv::new("json-layers");
+    t.global_set("user.email", "home@example.com");
+    let repo = t.init_repo("proj");
+    t.sh(Some(&repo), &["config", "user.email", "work@example.com"]);
+    let all = layers(&read_all(t.git(), Some(&repo)).unwrap());
+    let email = all.iter().find(|k| k.key == "user.email").unwrap();
+    let v = serde_json::to_value(email).unwrap();
+    assert_eq!(v["multiValued"], json!(false));
+    assert_eq!(v["layers"][0]["status"], "overridden");
+    assert_eq!(v["layers"][1]["status"], "used");
+    assert_eq!(v["layers"][1]["entry"]["scope"], "local");
+    assert_eq!(v["layers"][1]["at"]["nth"], json!(0));
+    assert_eq!(v["layers"][1]["at"]["origin"]["kind"], "file");
+    let fetch = serde_json::to_value(gitid_core::config::Status::AlsoUsed).unwrap();
+    assert_eq!(fetch, "alsoUsed");
+}

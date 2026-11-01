@@ -52,22 +52,22 @@ pub(crate) fn path_str(p: &Path) -> Result<&str> {
 /// Set a single-valued key. Fails with [`Error::MultipleValues`] if the key
 /// already has several values in that file, rather than guessing which to replace.
 pub fn set(git: &dyn Git, target: &Target, key: &str, value: &str) -> Result<()> {
-    run_write(git, target, &[], key, Some(value), WriteKind::Set).map(|_| ())
+    run_write(git, target, &[], key, &[value], WriteKind::Set).map(|_| ())
 }
 
 /// Add another value to a (multi-valued) key, keeping existing ones.
 pub fn add(git: &dyn Git, target: &Target, key: &str, value: &str) -> Result<()> {
-    run_write(git, target, &["--add"], key, Some(value), WriteKind::Set).map(|_| ())
+    run_write(git, target, &["--add"], key, &[value], WriteKind::Set).map(|_| ())
 }
 
 /// Remove a single-valued key. `Ok(false)` if it wasn't set.
 pub fn unset(git: &dyn Git, target: &Target, key: &str) -> Result<bool> {
-    run_write(git, target, &["--unset"], key, None, WriteKind::Unset)
+    run_write(git, target, &["--unset"], key, &[], WriteKind::Unset)
 }
 
 /// Remove every value of a key. `Ok(false)` if it wasn't set.
 pub fn unset_all(git: &dyn Git, target: &Target, key: &str) -> Result<bool> {
-    run_write(git, target, &["--unset-all"], key, None, WriteKind::Unset)
+    run_write(git, target, &["--unset-all"], key, &[], WriteKind::Unset)
 }
 
 /// Remove exactly the values equal to `value` (other values of the key stay).
@@ -81,8 +81,37 @@ pub fn unset_value(git: &dyn Git, target: &Target, key: &str, value: &str) -> Re
         target,
         &["--unset-all"],
         key,
-        Some(&pattern),
+        &[&pattern],
         WriteKind::Unset,
+    )
+}
+
+/// Change every value of `key` equal to `old` into `new`, in place. Other
+/// values of the key are untouched. `Ok(false)` if no value matched.
+pub fn replace_value(
+    git: &dyn Git,
+    target: &Target,
+    key: &str,
+    old: &str,
+    new: &str,
+) -> Result<bool> {
+    let pattern = format!("^{}$", escape_regex(old));
+    let (dir, flags) = target.invocation()?;
+    // Check first: --replace-all with no match would *add* the value instead.
+    let mut get = vec!["config"];
+    get.extend(flags.iter().copied());
+    get.extend(["--get-all", "--", key, pattern.as_str()]);
+    if !git.run(dir, &get)?.success() {
+        return Ok(false);
+    }
+    // `key new pattern`: replace only the values matching the pattern.
+    run_write(
+        git,
+        target,
+        &["--replace-all"],
+        key,
+        &[new, &pattern],
+        WriteKind::Set,
     )
 }
 
@@ -97,7 +126,7 @@ fn run_write(
     target: &Target,
     mode: &[&str],
     key: &str,
-    value: Option<&str>,
+    values: &[&str],
     kind: WriteKind,
 ) -> Result<bool> {
     if key.trim().is_empty() {
@@ -116,9 +145,7 @@ fn run_write(
     // `--` so values like "-x" aren't taken as options.
     args.push("--");
     args.push(key);
-    if let Some(v) = value {
-        args.push(v);
-    }
+    args.extend(values);
 
     let out = git.run(dir, &args)?;
     if out.success() {

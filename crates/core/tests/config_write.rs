@@ -117,3 +117,47 @@ fn missing_file_reads_as_empty() {
     let target = Target::File(t.root.join("nope/x.gitconfig"));
     assert!(read_target(t.git(), &target).unwrap().is_empty());
 }
+
+#[test]
+fn replace_value_changes_only_the_matching_value() {
+    let t = TestEnv::new("w-replace");
+    let g = Target::Global;
+    config::add(t.git(), &g, "x.k", "a.b").unwrap();
+    config::add(t.git(), &g, "x.k", "aXb").unwrap();
+    config::add(t.git(), &g, "x.k", "keep").unwrap();
+
+    assert!(config::replace_value(t.git(), &g, "x.k", "a.b", "NEW").unwrap());
+    assert_eq!(
+        values(&t, &g, "x.k"),
+        [Some("NEW".into()), Some("aXb".into()), Some("keep".into())]
+    );
+    // No match: nothing changes (git alone would have *added* the value).
+    assert!(!config::replace_value(t.git(), &g, "x.k", "nope", "X").unwrap());
+    assert_eq!(values(&t, &g, "x.k").len(), 3);
+}
+
+#[test]
+fn layers_from_a_real_repo() {
+    use gitid_core::config::{layers, read_all, resolve, Status};
+    let t = TestEnv::new("w-layers");
+    t.global_set("user.email", "home@example.com");
+    let repo = t.init_repo("proj");
+    t.sh(Some(&repo), &["config", "user.email", "work@example.com"]);
+    t.sh(
+        Some(&repo),
+        &["remote", "add", "origin", "https://h.example/a.git"],
+    );
+
+    let snap = read_all(t.git(), Some(&repo)).unwrap();
+    let all = layers(&snap);
+    let email = all.iter().find(|k| k.key == "user.email").unwrap();
+    let st: Vec<Status> = email.layers.iter().map(|l| l.status).collect();
+    assert_eq!(st, [Status::Overridden, Status::Used]);
+    let fetch = all.iter().find(|k| k.key == "remote.origin.fetch").unwrap();
+    assert!(fetch.multi_valued);
+    for k in &all {
+        for l in &k.layers {
+            assert_eq!(resolve(&snap, &l.at), Some(&l.entry), "{}", k.key);
+        }
+    }
+}

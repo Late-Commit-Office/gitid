@@ -2,6 +2,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AddTo,
   CommandError,
   GitInfo,
   IdentityView,
@@ -9,7 +10,9 @@ import type {
   RuleInput,
   RulesView,
   SaveRuleResult,
+  ScopesView,
   SettingsView,
+  ValueRef,
 } from "./types";
 
 export class AppError extends Error {
@@ -52,4 +55,13 @@ export const api = {
   saveRule: (input: RuleInput) => call<SaveRuleResult>("save_rule", { input }),
   removeRule: (id: string, deleteFile: boolean) => call<RulesView>("remove_rule", { id, deleteFile }),
   checkRule: (id: string, path: string) => call<RuleCheck>("check_rule", { id, path }),
+
+  /** Config visible from `path` (null: outside any folder). */
+  scopes: (path: string | null) => call<ScopesView>("get_scopes", { path }),
+  editScopeValue: (path: string | null, at: ValueRef, value: string) =>
+    call<ScopesView>("edit_scope_value", { path, at, value }),
+  removeScopeValue: (path: string | null, at: ValueRef) =>
+    call<ScopesView>("remove_scope_value", { path, at }),
+  addScopeValue: (path: string | null, scope: AddTo, key: string, value: string) =>
+    call<ScopesView>("add_scope_value", { path, scope, key, value }),
 };

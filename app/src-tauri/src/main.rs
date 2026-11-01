@@ -9,6 +9,7 @@
 
 mod commands;
 mod rule_commands;
+mod scope_commands;
 mod state;
 
 use tauri::Manager;
@@ -38,6 +39,10 @@ fn main() {
             rule_commands::save_rule,
             rule_commands::remove_rule,
             rule_commands::check_rule,
+            scope_commands::get_scopes,
+            scope_commands::edit_scope_value,
+            scope_commands::remove_scope_value,
+            scope_commands::add_scope_value,
         ])
         .run(tauri::generate_context!())
         .expect("error while running gitid");

@@ -184,3 +184,43 @@ export interface RuleInput {
   when: When[];
   replace: boolean;
 }
+
+// ---------------------------------------------------------------- scopes
+
+/** What git does with one value: uses it, ignores it for a later one, or (for list keys) uses it too. */
+export type ValueStatus = "used" | "overridden" | "alsoUsed";
+
+/** Points at one value for editing: the n-th value of `key` in `file`. */
+export interface ValueRef {
+  file: string;
+  key: string;
+  nth: number;
+}
+
+export interface ScopeValue {
+  scope: Scope;
+  status: ValueStatus;
+  /** Masked if it looks like a secret; null for a bare `key` line (true). */
+  value: string | null;
+  masked: boolean;
+  origin: Origin;
+  /** Read from a file the scope's main file includes (e.g. a rule's file). */
+  included: boolean;
+  /** null when the value can't be edited here (set by git -c or the environment). */
+  at: ValueRef | null;
+}
+
+export interface KeyView {
+  key: string;
+  multiValued: boolean;
+  /** In git's reading order: system, global, local (later wins). */
+  values: ScopeValue[];
+}
+
+export interface ScopesView {
+  folder: string | null;
+  repo: RepoLocation | null;
+  keys: KeyView[];
+}
+
+export type AddTo = "system" | "global" | "local";

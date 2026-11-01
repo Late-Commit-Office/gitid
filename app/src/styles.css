@@ -122,6 +122,10 @@ p {
   padding: 0.35rem 0.6rem 0.6rem;
 }
 
+.tab {
+  white-space: nowrap;
+}
+
 .tab:hover {
   color: var(--ink);
 }
@@ -760,6 +764,123 @@ button.danger {
   flex-basis: 100%;
 }
 
+/* ---------------------------------------------------------------- all config (scopes) */
+
+.scopes-tools {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.scopes-tools input[type="text"] {
+  flex: 1;
+}
+
+.add-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  padding: 0.75rem 0;
+}
+
+.add-form input[type="text"] {
+  flex: none;
+  width: 100%;
+}
+
+.scope-section {
+  margin-top: 1.5rem;
+}
+
+.scope-section > h2 {
+  font-size: 0.85rem;
+  color: var(--muted);
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 0;
+}
+
+.key-block {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.key-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin: 0 0 0.3rem;
+  overflow-wrap: anywhere;
+}
+
+.key-note {
+  font-family: var(--ui);
+  font-weight: 400;
+  font-size: 0.8rem;
+  margin-left: 0.6rem;
+}
+
+.values {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* One value per line, in git's reading order: where it's set, the value,
+   and whether git uses it. The used value carries the green marker. */
+.value-row {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr) 5.5rem auto;
+  gap: 0.15rem 0.75rem;
+  align-items: baseline;
+  padding: 0.3rem 0 0.3rem 0.6rem;
+  border-left: 3px solid transparent;
+}
+
+.value-row.status-used,
+.value-row.status-alsoUsed {
+  border-left-color: var(--ok);
+}
+
+.scope-tag {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.value {
+  overflow-wrap: anywhere;
+}
+
+.value.is-overridden {
+  color: var(--muted);
+}
+
+.where {
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.status-text {
+  font-size: 0.8rem;
+}
+
+.status-used .status-text,
+.status-alsoUsed .status-text {
+  color: var(--ok);
+}
+
+.status-overridden .status-text {
+  color: var(--muted);
+}
+
+.value-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.value-row .confirm {
+  grid-column: 1 / -1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
@@ -770,12 +891,34 @@ button.danger {
   #app {
     padding: 1rem;
   }
+  .value-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .value-row .scope-tag,
+  .value-row .status-text {
+    grid-column: auto;
+  }
+  .value-cell {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .add-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .row,
   .row-text-wide {
     grid-template-columns: minmax(0, 1fr);
   }
   .tabs {
     margin-left: 0.25rem;
+  }
+  .tab {
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+  }
+  /* Also shown in Settings; the tabs need the room here. */
+  .git-status {
+    display: none;
   }
   .trail {
     grid-template-columns: 3.5rem minmax(0, 1fr);
