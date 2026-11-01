@@ -1,6 +1,6 @@
 // Typed wrappers around the Rust commands. Nothing else calls invoke().
 
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   AddTo,
   CommandError,
@@ -10,6 +10,8 @@ import type {
   RuleInput,
   RulesView,
   SaveRuleResult,
+  ScanProgress,
+  ScanReport,
   ScopesView,
   SettingsView,
   ValueRef,
@@ -64,4 +66,13 @@ export const api = {
     call<ScopesView>("remove_scope_value", { path, at }),
   addScopeValue: (path: string | null, scope: AddTo, key: string, value: string) =>
     call<ScopesView>("add_scope_value", { path, scope, key, value }),
+
+  /** Scan a folder for repos; progress arrives through `onProgress`. */
+  scan: (path: string, includeHidden: boolean, onProgress: (p: ScanProgress) => void) => {
+    const channel = new Channel<ScanProgress>();
+    channel.onmessage = onProgress;
+    return call<ScanReport>("scan_folder", { path, depth: null, includeHidden, onProgress: channel });
+  },
+  /** Stop the scan in progress; `scan` then resolves with what was found so far. */
+  cancelScan: () => call<void>("cancel_scan"),
 };

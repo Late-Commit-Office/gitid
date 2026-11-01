@@ -9,6 +9,7 @@
 
 mod commands;
 mod rule_commands;
+mod scan_commands;
 mod scope_commands;
 mod state;
 
@@ -43,6 +44,8 @@ fn main() {
             scope_commands::edit_scope_value,
             scope_commands::remove_scope_value,
             scope_commands::add_scope_value,
+            scan_commands::scan_folder,
+            scan_commands::cancel_scan,
         ])
         .run(tauri::generate_context!())
         .expect("error while running gitid");

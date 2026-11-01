@@ -2,7 +2,8 @@
 //! (separate from git config: it only holds which git executable to use).
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use gitid_core::{GitVersion, Result, SystemGit};
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,8 @@ pub struct AppState {
     settings: Mutex<AppSettings>,
     /// Where `settings` is saved; set once at startup.
     file: Mutex<Option<PathBuf>>,
+    /// Stop flag of the scan in progress, if any.
+    scan: Mutex<Option<Arc<AtomicBool>>>,
 }
 
 impl AppState {
@@ -49,6 +52,22 @@ impl AppState {
         match lock(&self.file).as_deref() {
             Some(file) => save(file, &snapshot),
             None => Ok(()),
+        }
+    }
+
+    /// A fresh stop flag for a new scan. Starting a scan stops any earlier one.
+    pub fn start_scan(&self) -> Arc<AtomicBool> {
+        let flag = Arc::new(AtomicBool::new(false));
+        if let Some(old) = lock(&self.scan).replace(flag.clone()) {
+            old.store(true, Ordering::Relaxed);
+        }
+        flag
+    }
+
+    /// Ask the scan in progress (if any) to stop.
+    pub fn cancel_scan(&self) {
+        if let Some(flag) = lock(&self.scan).as_ref() {
+            flag.store(true, Ordering::Relaxed);
         }
     }
 

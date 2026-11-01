@@ -4,7 +4,7 @@
 
 See which git identity applies to any folder, and why, so commits never fall back to your OS login name again.
 
-Status: **step 4 in progress** — the `gitid` CLI explains the effective identity, edits config, and manages per-folder and per-server identity rules. The desktop app shows the identity for any folder, manages identity rules, shows and edits all config with which value wins, and edits your global settings; a repo scanner is next.
+Status: **all v1 features are in.** The `gitid` CLI and the desktop app explain the effective identity, manage per-folder and per-server identity rules, show and edit all config with which value wins, scan folders for repos with a wrong identity, and edit your global settings.
 
 ## The desktop app
 
@@ -18,6 +18,7 @@ npm run tauri build          # installable bundle in target/release/bundle/
 ```
 
 - **Identity:** pick a folder to see who commits there will be from, which file (or rule, or environment variable) each value comes from, and a button to fix each problem.
+- **Scan:** pick a folder (like `~/code`) to find the repositories under it whose commits would fail, would use an identity git made up, or would use something other than your default, and why (a rule, the repo's own config, an environment variable). "Open" shows any of them in Identity.
 - **Rules:** add, edit and remove identities for folders (`~/work`) or servers (your Gitea). Saving checks the rule against repos in its folders; "Check a folder" tests any repo. Rules written by hand are listed and can be removed, but not edited.
 - **All config:** every key visible from a folder, each value it has in system, global and repository config (and files those include), and which one git uses. Values can be edited, removed and added. Secrets such as tokens in URLs are masked before they reach the app's window, so masked values can be removed but not edited.
 - **Settings:** your default name and email, "never guess my identity" (`user.useConfigOnly`), default branch, pull behavior, editor, commit signing, and which git the app uses. Changes go to your global git config; the app's own choice of git is saved separately in its config folder.
@@ -32,6 +33,7 @@ gitid whoami ~/code/app
 gitid show ~/code/app --key user.email  # every value of a key, and which one wins
 gitid whoami --json                     # the same as JSON, for scripts
 
+gitid scan ~/code                       # repos with a missing, guessed or non-default identity
 gitid settings                          # the settings the app manages, with current values
 gitid set user.name "Ann Lee"           # global by default; managed settings are checked first
 gitid set user.email ann@repo.example --local
@@ -70,15 +72,16 @@ crates/core    gitid-core: all logic, no UI
   repo.rs      repository discovery (work tree, git dir)
   identity.rs  effective author/committer + where each value came from + warnings
   settings.rs  the global settings gitid manages: labels, help, validation
-  rules.rs     identity rules: list, add, remove, check, describe
+  rules.rs     identity rules: list, add, edit, remove, check, describe
+  scan.rs      find repos under a folder and sort them by identity
   platform.rs  home folder, case sensitivity, how paths are written in includeIf
   paths.rs     canonical paths without Windows \\?\ prefixes
   secrets.rs   masks credentials before display
 crates/cli     gitid binary (clap)
 app/           desktop app frontend: plain TypeScript, built with Vite
   src/lib/     api.ts (typed calls to Rust), types.ts (the JSON shapes), dom.ts, paths.ts, recent.ts
-  src/views/   identity.ts, rules.ts, scopes.ts (All config), settings.ts
-app/src-tauri/ desktop app backend: commands.rs, rule_commands.rs, scope_commands.rs (the only calls the UI can make), state.rs (which git; saved settings.json)
+  src/views/   identity.ts, scan.ts, rules.ts, scopes.ts (All config), settings.ts
+app/src-tauri/ desktop app backend: commands.rs, rule_commands.rs, scope_commands.rs, scan_commands.rs (the only calls the UI can make), state.rs (which git; saved settings.json)
 ```
 
 The app's webview gets no plugin permissions: it can only call gitid's own commands, and even the folder picker is opened from Rust. Text from config is only ever inserted as text, never as HTML.

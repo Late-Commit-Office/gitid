@@ -71,6 +71,24 @@ pub enum Cmd {
         #[command(flatten)]
         scope: ScopeArgs,
     },
+    /// Find repos under PATH whose identity is missing, guessed, or not your default
+    Scan {
+        /// Folder to search
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Also list repos that use your default identity
+        #[arg(long)]
+        all: bool,
+        /// How many folders deep to look
+        #[arg(long, default_value_t = 6, value_name = "N")]
+        depth: usize,
+        /// Also look inside hidden folders (names starting with a dot)
+        #[arg(long)]
+        hidden: bool,
+        /// Print JSON instead of text
+        #[arg(long)]
+        json: bool,
+    },
     /// The global settings gitid manages, with their current values
     Settings {
         /// Print JSON instead of text
@@ -268,6 +286,31 @@ mod tests {
 
         assert!(parse(&["set", "x.y", "v", "--global", "--system"]).is_err());
         assert!(parse(&["set", "x.y"]).is_err());
+    }
+
+    #[test]
+    fn scan_command() {
+        assert_eq!(
+            cmd(&["scan"]),
+            Cmd::Scan {
+                path: ".".into(),
+                all: false,
+                depth: 6,
+                hidden: false,
+                json: false
+            }
+        );
+        assert_eq!(
+            cmd(&["scan", "~/code", "--all", "--depth", "3", "--hidden", "--json"]),
+            Cmd::Scan {
+                path: "~/code".into(),
+                all: true,
+                depth: 3,
+                hidden: true,
+                json: true
+            }
+        );
+        assert!(parse(&["scan", "--depth", "x"]).is_err());
     }
 
     #[test]

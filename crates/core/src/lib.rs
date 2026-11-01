@@ -16,6 +16,7 @@ pub mod paths;
 pub mod platform;
 pub mod repo;
 pub mod rules;
+pub mod scan;
 pub mod secrets;
 pub mod settings;
 

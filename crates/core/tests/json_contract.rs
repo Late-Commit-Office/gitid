@@ -198,3 +198,42 @@ fn layers_shape() {
     let fetch = serde_json::to_value(gitid_core::config::Status::AlsoUsed).unwrap();
     assert_eq!(fetch, "alsoUsed");
 }
+
+#[test]
+fn scan_report_shape() {
+    use gitid_core::scan::{scan, ScanOptions};
+    use std::sync::atomic::AtomicBool;
+    let t = TestEnv::new("json-scan");
+    t.global_set("user.name", "Ann Lee");
+    t.global_set("user.email", "ann@home.example");
+    let root = t.mkdir("code");
+    let other = t.init_repo("code/other");
+    t.sh(Some(&other), &["config", "user.email", "x@repo.example"]);
+    t.init_repo("code/same");
+    let report = scan(
+        t.git(),
+        &root,
+        &ScanOptions::default(),
+        &AtomicBool::new(false),
+        &|_| {},
+    )
+    .unwrap();
+    let v = serde_json::to_value(&report).unwrap();
+    assert!(at(&v, "/root").is_string());
+    assert_eq!(at(&v, "/cancelled"), &json!(false));
+    assert_eq!(at(&v, "/unreadable"), &json!(0));
+    assert!(at(&v, "/findings/0/path").is_string());
+    assert_eq!(at(&v, "/findings/0/identity"), "Ann Lee <x@repo.example>");
+    assert_eq!(
+        at(&v, "/findings/0/verdict"),
+        &json!({ "kind": "different", "because": [{ "kind": "repoConfig" }] })
+    );
+    assert_eq!(at(&v, "/findings/1/verdict"), &json!({ "kind": "same" }));
+    let p = serde_json::to_value(gitid_core::scan::Progress {
+        folders_seen: 1,
+        found: 2,
+        checked: 3,
+    })
+    .unwrap();
+    assert_eq!(p, json!({ "foldersSeen": 1, "found": 2, "checked": 3 }));
+}

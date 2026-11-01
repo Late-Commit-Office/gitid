@@ -224,3 +224,39 @@ export interface ScopesView {
 }
 
 export type AddTo = "system" | "global" | "local";
+
+// ---------------------------------------------------------------- scan
+
+export interface ScanProgress {
+  foldersSeen: number;
+  found: number;
+  checked: number;
+}
+
+/** Why a repo's identity differs from your default. */
+export type Reason =
+  | { kind: "rule"; id: string }
+  | { kind: "repoConfig" }
+  | { kind: "env"; var: string }
+  | { kind: "otherConfig"; file: string | null };
+
+export type Verdict =
+  | { kind: "missing"; message: string }
+  | { kind: "guessed" }
+  | { kind: "different"; because: Reason[] }
+  | { kind: "same" };
+
+export interface Finding {
+  path: string;
+  /** `Name <email>` as commits would show it, if git can produce one. */
+  identity: string | null;
+  verdict: Verdict;
+}
+
+export interface ScanReport {
+  root: string;
+  /** Problems first, then different, then same. */
+  findings: Finding[];
+  cancelled: boolean;
+  unreadable: number;
+}

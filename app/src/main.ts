@@ -3,12 +3,14 @@
 import { api } from "./lib/api";
 import { append, clear, el } from "./lib/dom";
 import { setHome } from "./lib/paths";
+import { rememberFolder } from "./lib/recent";
 import { mountIdentityView } from "./views/identity";
 import { mountRulesView } from "./views/rules";
+import { mountScanView } from "./views/scan";
 import { mountScopesView } from "./views/scopes";
 import { mountSettingsView } from "./views/settings";
 
-type ViewName = "identity" | "rules" | "scopes" | "settings";
+type ViewName = "identity" | "scan" | "rules" | "scopes" | "settings";
 
 const root = document.getElementById("app");
 if (root) void start(root);
@@ -41,6 +43,7 @@ async function start(root: HTMLElement): Promise<void> {
     clear(tabs);
     for (const [name, label] of [
       ["identity", "Identity"],
+      ["scan", "Scan"],
       ["rules", "Rules"],
       ["scopes", "All config"],
       ["settings", "Settings"],
@@ -67,6 +70,14 @@ async function start(root: HTMLElement): Promise<void> {
     }
     if (view === "identity") {
       mountIdentityView(content, { openSettings: () => show("settings") });
+    } else if (view === "scan") {
+      mountScanView(content, {
+        // The Identity view opens the most recent folder.
+        openFolder: (path) => {
+          rememberFolder(path);
+          show("identity");
+        },
+      });
     } else if (view === "rules") {
       mountRulesView(content);
     } else if (view === "scopes") {
