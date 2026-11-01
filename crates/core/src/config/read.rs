@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use super::model::{ConfigSnapshot, Entry, Origin, Scope};
+use super::write::Target;
 use crate::error::{Error, Result};
 use crate::git::Git;
 use crate::repo::{self, RepoLocation};
@@ -48,6 +49,49 @@ pub fn read_all_in(
 
     let entries = parse_z(&out.stdout, with_scope, base)?;
     Ok(ConfigSnapshot { entries })
+}
+
+/// Read only what one file sets, without following its includes.
+/// A file that doesn't exist yet reads as empty.
+pub fn read_target(git: &dyn Git, target: &Target) -> Result<Vec<Entry>> {
+    let repo = match target {
+        Target::Local(dir) => match repo::discover(git, dir)? {
+            Some(r) => Some(r),
+            None => return Err(Error::NotARepository(dir.clone())),
+        },
+        _ => None,
+    };
+    let (dir, flags) = target.invocation()?;
+    let mut args = vec!["config"];
+    args.extend(flags);
+    args.extend(["--no-includes", "--list", "--show-origin", "-z"]);
+
+    let out = git.run(dir, &args)?;
+    if !out.success() {
+        let missing = out.stderr.contains("unable to read config file")
+            || out.stderr.contains("No such file");
+        if missing || (out.stdout.is_empty() && out.stderr.trim().is_empty()) {
+            return Ok(Vec::new());
+        }
+        return Err(Error::GitFailed {
+            args: args.iter().map(|s| s.to_string()).collect(),
+            code: out.code,
+            stderr: out.stderr,
+        });
+    }
+
+    let scope = match target {
+        Target::System => Scope::System,
+        Target::Global => Scope::Global,
+        Target::Local(_) => Scope::Local,
+        Target::File(_) => Scope::Unknown,
+    };
+    let base = repo.as_ref().map(RepoLocation::git_cwd);
+    let mut entries = parse_z(&out.stdout, false, base)?;
+    for e in &mut entries {
+        e.scope = scope;
+    }
+    Ok(entries)
 }
 
 /// Parse `git config --list --show-origin [--show-scope] -z`.

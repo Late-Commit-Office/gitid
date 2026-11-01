@@ -3,15 +3,19 @@
 //! The one rule: every read and write goes through the `git` executable.
 //! Config files are never parsed or written directly.
 //!
-//! Step 1 (this crate today): locating git, reading config with scope and
-//! origin, and explaining the effective author/committer identity.
+//! - Step 1: locating git, reading config with scope and origin, and
+//!   explaining the effective author/committer identity.
+//! - Step 2: writing config with an explicit target, and identity rules
+//!   (`includeIf` per folder or per server) in [`rules`].
 
 pub mod config;
 pub mod error;
 pub mod git;
 pub mod identity;
 pub mod paths;
+pub mod platform;
 pub mod repo;
+pub mod rules;
 pub mod secrets;
 
 pub use config::{ConfigSnapshot, Entry, Origin, Scope};

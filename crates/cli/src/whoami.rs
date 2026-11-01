@@ -1,7 +1,9 @@
 use std::path::Path;
 
+use gitid_core::rules::{self, Rule};
 use gitid_core::{
-    effective_identity, GitVersion, Part, Result, RoleIdentity, Severity, SystemGit, Warning,
+    effective_identity, paths, GitVersion, Part, Result, RoleIdentity, Severity, Source, SystemGit,
+    Warning,
 };
 
 use crate::style;
@@ -10,6 +12,8 @@ use crate::{EXIT_OK, EXIT_PROBLEMS};
 pub fn run(git: &SystemGit, version: GitVersion, path: &Path) -> Result<u8> {
     let folder = gitid_core::paths::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let id = effective_identity(git, &folder)?;
+    // Only used to label values that come from a rule; never fatal.
+    let rules = rules::list_rules(git).unwrap_or_default();
 
     let repo = match &id.repo {
         Some(r) => style::tilde(r.work_tree.as_deref().unwrap_or(&r.git_dir)),
@@ -20,11 +24,11 @@ pub fn run(git: &SystemGit, version: GitVersion, path: &Path) -> Result<u8> {
     println!("git         {version}  {}", style::tilde(git.path()));
     println!();
 
-    print_role("Author", &id.author);
+    print_role("Author", &id.author, &rules);
     if id.author_matches_committer() && same_sources(&id.author, &id.committer) {
         println!("Committer   same as author");
     } else {
-        print_role("Committer", &id.committer);
+        print_role("Committer", &id.committer, &rules);
     }
 
     if !id.env.is_empty() {
@@ -69,7 +73,7 @@ pub fn run(git: &SystemGit, version: GitVersion, path: &Path) -> Result<u8> {
     })
 }
 
-fn print_role(title: &str, r: &RoleIdentity) {
+fn print_role(title: &str, r: &RoleIdentity, rules: &[Rule]) {
     match r.display() {
         Some(line) => println!("{title:<11} {line}"),
         None => println!("{title:<11} (none: git will refuse to commit)"),
@@ -84,6 +88,10 @@ fn print_role(title: &str, r: &RoleIdentity) {
             Some(f) => style::source(&f.source, &expected),
             None => format!("{:<9} not set", "missing"),
         };
+        let detail = match r.field(part).and_then(|f| rule_for(&f.source, rules)) {
+            Some(rule) => format!("{detail}  (rule: {})", rule.id),
+            None => detail,
+        };
         println!("  {:<9} {detail}", part.label());
     }
 }
@@ -97,17 +105,30 @@ fn same_sources(a: &RoleIdentity, b: &RoleIdentity) -> bool {
         .all(|p| a.field(*p).map(|f| &f.source) == b.field(*p).map(|f| &f.source))
 }
 
+/// The rule whose identity file supplied this value, if any.
+fn rule_for<'a>(source: &Source, rules: &'a [Rule]) -> Option<&'a Rule> {
+    let Source::Config(entry) = source else {
+        return None;
+    };
+    let file = entry.origin.file()?;
+    let real = |p: &Path| paths::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let file = real(file);
+    rules.iter().find(|r| real(&r.file) == file)
+}
+
 /// A command the user can paste to fix a problem.
 fn hint(w: &Warning) -> Option<&'static str> {
     match w {
         Warning::Guessed {
             part: Part::Name, ..
-        } => Some(r#"git config --global user.name "Your Name""#),
+        } => Some(r#"gitid set user.name "Your Name""#),
         Warning::Guessed {
             part: Part::Email, ..
-        } => Some("git config --global user.email you@example.com"),
-        Warning::Missing { .. } => Some("set user.name and user.email (git config --global ...)"),
-        Warning::GuessingAllowed => Some("git config --global user.useConfigOnly true"),
+        } => Some("gitid set user.email you@example.com"),
+        Warning::Missing { .. } => {
+            Some(r#"gitid set user.name "Your Name" and gitid set user.email you@example.com"#)
+        }
+        Warning::GuessingAllowed => Some("gitid set user.useConfigOnly true"),
         _ => None,
     }
 }

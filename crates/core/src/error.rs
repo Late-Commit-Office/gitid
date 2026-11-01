@@ -5,9 +5,23 @@ use std::path::PathBuf;
 /// Everything that can go wrong in the core.
 ///
 /// Note that "no identity configured" is NOT an error: it is a normal answer,
-/// reported through [`crate::identity::IdentStatus::Missing`].
+/// reported through [`crate::identity::RoleIdentity::error`].
 #[derive(Debug)]
 pub enum Error {
+    /// A local (repo) write was asked for a folder that is not in a repository.
+    NotARepository(PathBuf),
+    /// The installed git is too old for this feature.
+    Unsupported {
+        feature: &'static str,
+        needs: crate::git::GitVersion,
+        have: crate::git::GitVersion,
+    },
+    /// The key has several values; a plain set would be ambiguous.
+    MultipleValues { key: String },
+    /// Something the user typed can't be used (bad key, empty host, ...).
+    InvalidInput(String),
+    /// Filesystem work outside git (creating the identities folder).
+    Io { path: PathBuf, source: io::Error },
     /// No git executable was found in any of the searched locations.
     GitNotFound { searched: Vec<PathBuf> },
     /// git exists but could not be started.
@@ -29,6 +43,20 @@ pub type Result<T> = std::result::Result<T, Error>;
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Error::NotARepository(p) => write!(f, "not inside a git repository: {}", p.display()),
+            Error::Unsupported {
+                feature,
+                needs,
+                have,
+            } => {
+                write!(f, "{feature} needs git {needs} or newer (you have {have})")
+            }
+            Error::MultipleValues { key } => write!(
+                f,
+                "{key} has several values; remove the extra ones first (or use add)"
+            ),
+            Error::InvalidInput(msg) => f.write_str(msg),
+            Error::Io { path, source } => write!(f, "{}: {source}", path.display()),
             Error::GitNotFound { searched } => match searched.as_slice() {
                 [] => write!(f, "git was not found"),
                 [only] => write!(f, "git was not found at {}", only.display()),
@@ -56,7 +84,7 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Error::Spawn { source, .. } => Some(source),
+            Error::Spawn { source, .. } | Error::Io { source, .. } => Some(source),
             _ => None,
         }
     }
