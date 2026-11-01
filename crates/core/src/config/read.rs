@@ -105,8 +105,8 @@ pub fn parse_z(bytes: &[u8], with_scope: bool, base: Option<&Path>) -> Result<Ve
         fields.pop();
     }
 
-    let per_entry = if with_scope { 3 } else { 2 };
-    if fields.len() % per_entry != 0 {
+    let per_entry: usize = if with_scope { 3 } else { 2 };
+    if !fields.len().is_multiple_of(per_entry) {
         return Err(Error::Parse(format!(
             "config list had {} fields, not a multiple of {per_entry}",
             fields.len()
