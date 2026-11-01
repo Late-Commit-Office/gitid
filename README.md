@@ -22,7 +22,7 @@ DevTools (right-click > Inspect Element) are always on in `tauri dev`. Release b
 
 - **Identity:** pick a folder to see who commits there will be from, which file (or rule, or environment variable) each value comes from, and a button to fix each problem.
 - **Scan:** pick a folder (like `~/code`) to find the repositories under it whose commits would fail, would use an identity git made up, or would use something other than your default, and why (a rule, the repo's own config, an environment variable). "Open" shows any of them in Identity.
-- **Rules:** add, edit and remove identities for folders (`~/work`) or servers (your Gitea). Saving checks the rule against repos in its folders; "Check a folder" tests any repo. Rules written by hand are listed and can be removed, but not edited.
+- **Rules:** add, edit and remove identities for folders (`~/work`) or servers (your Gitea). Saving checks the rule against repos in its folders; "Check a folder" tests any repo. Rules gitid didn't create (added to your config by hand or by another tool) are listed and can be removed, but not edited.
 - **All config:** every key visible from a folder, each value it has in system, global and repository config (and files those include), and which one git uses. Values can be edited, removed and added. Secrets such as tokens in URLs are masked before they reach the app's window, so masked values can be removed but not edited.
 - **Settings:** your default name and email, "never guess my identity" (`user.useConfigOnly`), default branch, pull behavior, editor, commit signing, and which git the app uses. Changes go to your global git config; the app's own choice of git is saved separately in its config folder.
 
@@ -115,7 +115,7 @@ npm run check:locales    # every language: same entries and placeholders, right 
 cargo test -p gitid-app  # every error code the backend can send has an English entry
 ```
 
-`check:strings` can't tell a lone lowercase word shown as text (like "used") from a code value, so review those by hand.
+`check:strings` can't tell a lone lowercase word shown as text (like "effective") from a code value, so review those by hand.
 
 ## Tests
 

@@ -191,7 +191,7 @@ fn remove_rule_cleans_up_and_keeps_other_rules() {
         )
         .unwrap();
     }
-    // A hand-written rule (not in the identities folder) is listed too.
+    // A rule gitid didn't create (not in the identities folder) is listed too.
     let custom = t.write_file("home/custom.inc", "[user]\n\temail = ann@custom.example\n");
     t.global_set("includeIf.onbranch:release.path", &custom.to_string_lossy());
 

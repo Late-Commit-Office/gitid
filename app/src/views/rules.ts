@@ -173,7 +173,7 @@ export function mountRulesView(root: HTMLElement): void {
       el(
         "p",
         { class: "muted rule-file" },
-        r.managed ? null : el("span", {}, t("rules.handWritten")),
+        r.managed ? null : el("span", {}, t("rules.notManaged")),
         el("span", { class: "mono", title: r.file }, tilde(r.file)),
       ),
     );
@@ -184,7 +184,7 @@ export function mountRulesView(root: HTMLElement): void {
         el(
           "div",
           { class: "confirm", attrs: { role: "alert" } },
-          el("p", {}, t(r.managed ? "rules.confirm.managed" : "rules.confirm.handWritten", { id: r.id })),
+          el("p", {}, t(r.managed ? "rules.confirm.managed" : "rules.confirm.notManaged", { id: r.id })),
           el("button", { type: "button", class: "danger", on: { click: () => void remove(r) } }, t("rules.confirm.remove")),
           el(
             "button",
