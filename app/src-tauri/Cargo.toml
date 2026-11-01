@@ -8,6 +8,12 @@ rust-version.workspace = true
 
 # Desktop only, so no [lib] / mobile entry point (see Tauri's template for that).
 
+[features]
+# The web inspector in release builds (right-click > Inspect Element). CI's
+# test builds turn it on; releases must not (on macOS it uses private APIs).
+# Debug builds (`npm run tauri dev`) always have it.
+devtools = ["tauri/devtools"]
+
 [build-dependencies]
 tauri-build = { workspace = true }
 

@@ -15,7 +15,10 @@ cd app
 npm install                  # first time; commit the package-lock.json it creates
 npm run tauri dev            # run with live reload
 npm run tauri build          # installable bundle in target/release/bundle/
+npm run tauri build -- --features devtools   # the same, with the web inspector
 ```
+
+DevTools (right-click > Inspect Element) are always on in `tauri dev`. Release builds leave them out unless built with `--features devtools`, which CI's test builds use; releases must not, because on macOS it relies on private APIs.
 
 - **Identity:** pick a folder to see who commits there will be from, which file (or rule, or environment variable) each value comes from, and a button to fix each problem.
 - **Scan:** pick a folder (like `~/code`) to find the repositories under it whose commits would fail, would use an identity git made up, or would use something other than your default, and why (a rule, the repo's own config, an environment variable). "Open" shows any of them in Identity.

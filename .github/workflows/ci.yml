@@ -104,8 +104,10 @@ jobs:
       - run: cargo clippy -p gitid-app --all-targets -- -D warnings
       # The app's own tests (the JSON the rule form sends and receives).
       - run: cargo test -p gitid-app
+      # Test builds get the web inspector (right-click > Inspect Element);
+      # a release workflow must build without --features devtools.
       - name: Build app
-        run: npm run tauri build -- --ci --bundles ${{ matrix.bundles }}
+        run: npm run tauri build -- --ci --bundles ${{ matrix.bundles }} --features devtools
 
       # Bundles land in the workspace's target/ folder (repo root).
       - name: Package app (Linux)
