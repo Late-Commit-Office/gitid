@@ -103,6 +103,6 @@ Integration tests run real git in temp folders with `GIT_CONFIG_GLOBAL` pointed 
 ## Notes for later steps
 
 - The app's bundle identifier is a placeholder (`io.github.gitid` in `app/src-tauri/tauri.conf.json`). Change it to a reverse domain you own before the first release; changing it later moves the app's data folder.
-- The app uses Tauri's default icons. `npm run tauri icon path/to/icon.png` generates a full set.
+- To change the app icon, `npm run tauri icon path/to/icon.png` (a 1024×1024 PNG) regenerates everything in `app/src-tauri/icons/`.
 - Steps 1–2 were built without registry access, so `gitid-core` has no required dependencies (serde is an optional feature).
 - macOS: `/usr/bin/git` may be the Command Line Tools shim; detect with `xcode-select -p` before calling it (TODO in `git/locate.rs`).

@@ -308,7 +308,15 @@ mod tests {
     #[test]
     fn tilde_expands_only_at_the_start() {
         let home = Path::new("/home/ann");
-        assert_eq!(expand_tilde("~/work", Some(home)), "/home/ann/work");
+        // Compare as paths: on Windows the joined separator is `\`.
+        assert_eq!(
+            PathBuf::from(expand_tilde("~/work", Some(home))),
+            home.join("work")
+        );
+        assert_eq!(
+            PathBuf::from(expand_tilde("~/a/b", Some(home))),
+            home.join("a/b")
+        );
         assert_eq!(expand_tilde("~", Some(home)), "/home/ann");
         assert_eq!(expand_tilde("/srv/~x", Some(home)), "/srv/~x");
         assert_eq!(expand_tilde("~/work", None), "~/work");
