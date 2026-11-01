@@ -107,7 +107,7 @@ fn bad_keys_are_input_errors() {
     let t = TestEnv::new("w-badkey");
     for key in ["nosection", "x.has space", ""] {
         let err = config::set(t.git(), &Target::Global, key, "v").unwrap_err();
-        assert!(matches!(err, Error::InvalidInput(_)), "{key:?}: {err:?}");
+        assert!(matches!(err, Error::Invalid(_)), "{key:?}: {err:?}");
     }
 }
 

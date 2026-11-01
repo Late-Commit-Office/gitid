@@ -103,13 +103,10 @@ fn bad_values_are_rejected_before_writing() {
     ];
     for (key, v) in cases {
         let err = settings::apply(t.git(), key, Some(v)).unwrap_err();
-        assert!(
-            matches!(err, Error::InvalidInput(_)),
-            "{key}={v:?}: {err:?}"
-        );
+        assert!(matches!(err, Error::Invalid(_)), "{key}={v:?}: {err:?}");
     }
     let err = settings::apply(t.git(), "core.pager", Some("less")).unwrap_err();
-    assert!(matches!(err, Error::InvalidInput(_)));
+    assert!(matches!(err, Error::Invalid(_)));
     assert_eq!(std::fs::read_to_string(&t.global).unwrap(), "");
 }
 

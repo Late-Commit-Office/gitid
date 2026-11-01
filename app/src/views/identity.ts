@@ -2,6 +2,8 @@
 // where each value comes from, and what to fix.
 
 import { api, AppError } from "../lib/api";
+import { t } from "../lib/i18n";
+import { asAppError, errorDetail, errorText, warningDetail, warningText } from "../lib/messages";
 import { append, clear, el } from "../lib/dom";
 import { basename, tilde } from "../lib/paths";
 import { forgetFolder, recentFolders, rememberFolder } from "../lib/recent";
@@ -55,7 +57,7 @@ export function mountIdentityView(root: HTMLElement, options: IdentityOptions): 
       rememberFolder(folder);
     } catch (e) {
       state.result = null;
-      state.error = e instanceof AppError ? e : new AppError("internal", String(e));
+      state.error = asAppError(e);
       if (state.error.kind === "notADirectory") forgetFolder(folder);
     } finally {
       state.loading = false;
@@ -65,10 +67,10 @@ export function mountIdentityView(root: HTMLElement, options: IdentityOptions): 
 
   async function choose(): Promise<void> {
     try {
-      const picked = await api.pickFolder();
+      const picked = await api.pickFolder(t("dialog.chooseFolder"));
       if (picked) await open(picked);
     } catch (e) {
-      state.error = e instanceof AppError ? e : new AppError("internal", String(e));
+      state.error = asAppError(e);
       render();
     }
   }
@@ -168,7 +170,8 @@ function errorPanel(e: AppError): HTMLElement {
     "div",
     { class: "verdict problem", attrs: { role: "alert" } },
     el("p", { class: "lede" }, text[e.kind] ?? "Couldn't check this folder."),
-    text[e.kind] ? null : el("p", { class: "mono detail" }, e.message),
+    text[e.kind] ? null : el("p", {}, errorText(e)),
+    text[e.kind] || !errorDetail(e) ? null : el("p", { class: "mono detail" }, errorDetail(e)),
   );
 }
 
@@ -285,7 +288,7 @@ function fixFor(w: WarningReport, v: IdentityView, actions: Actions): HTMLElemen
         } catch (e) {
           button.disabled = false;
           button.textContent = "Couldn't turn it on";
-          button.title = e instanceof Error ? e.message : String(e);
+          button.title = errorText(e);
         }
       });
       return el("span", {}, button, el("span", { class: "muted fix-note" }, " Sets user.useConfigOnly in your global config."));
@@ -305,16 +308,19 @@ function issues(
   const ul = el("ul", { class: `issues ${tone}` });
   for (const w of list) {
     const fix = fixFor(w, v, actions);
-    append(ul, el("li", {}, el("p", {}, sentence(w.message)), fix ? el("div", { class: "fix" }, fix) : null));
+    const detail = warningDetail(w.warning);
+    append(
+      ul,
+      el(
+        "li",
+        {},
+        el("p", {}, warningText(w.warning)),
+        detail ? el("p", { class: "mono detail" }, detail) : null,
+        fix ? el("div", { class: "fix" }, fix) : null,
+      ),
+    );
   }
   return el("section", { class: "issues-block" }, el("h2", {}, title), ul);
-}
-
-function sentence(s: string): string {
-  // Capitalize the first word unless it is a config key like user.useConfigOnly.
-  const first = s.split(/\s/, 1)[0];
-  const t = first.includes(".") ? s : s.charAt(0).toUpperCase() + s.slice(1);
-  return /[.!?]$/.test(t) ? t : t + ".";
 }
 
 function environment(v: IdentityView): HTMLElement {

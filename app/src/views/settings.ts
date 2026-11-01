@@ -4,8 +4,9 @@
 import { api, AppError } from "../lib/api";
 import { append, clear, el } from "../lib/dom";
 import { type LanguageChoice, LOCALE_NAMES, LOCALES, resolveLocale, t } from "../lib/i18n";
+import { choiceLabel, errorDetail, errorText, settingHelp, settingLabel, settingPlaceholder } from "../lib/messages";
 import { tilde } from "../lib/paths";
-import type { SettingGroup, SettingValue, SettingsView } from "../lib/types";
+import type { CommandError, SettingGroup, SettingValue, SettingsView } from "../lib/types";
 
 const GROUPS: { id: SettingGroup; title: string; note?: string }[] = [
   {
@@ -108,7 +109,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
 
   function row(s: SettingValue): HTMLElement {
     const id = `setting-${s.key}`;
-    const label = el("label", { attrs: { for: id } }, s.label);
+    const label = el("label", { attrs: { for: id } }, settingLabel(s.key));
     let control: HTMLElement;
 
     switch (s.kind.kind) {
@@ -132,7 +133,8 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
         const current = s.value ?? kind.default;
         const select = el("select", { attrs: { id, "data-key": s.key } });
         for (const c of kind.choices) {
-          const label = c.value === kind.default ? `${c.label} (git's default)` : c.label;
+          const name = choiceLabel(s.key, c.value);
+          const label = c.value === kind.default ? `${name} (git's default)` : name;
           append(select, el("option", { attrs: { value: c.value, ...(c.value === current ? { selected: "" } : {}) } }, label));
         }
         select.addEventListener("change", () => {
@@ -150,7 +152,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
             id,
             "data-key": s.key,
             value: drafts.get(s.key) ?? s.value ?? "",
-            placeholder: kind.placeholder,
+            placeholder: settingPlaceholder(s.key, kind.placeholder),
             autocomplete: "off",
             autocapitalize: "off",
             spellcheck: "false",
@@ -178,7 +180,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
     return el(
       "div",
       { class: `row row-${s.kind.kind}` },
-      el("div", { class: "row-text" }, label, el("p", { class: "muted help" }, s.help)),
+      el("div", { class: "row-text" }, label, el("p", { class: "muted help" }, settingHelp(s.key))),
       el("div", { class: "row-control" }, control, rowStatus(s.key)),
     );
   }
@@ -251,7 +253,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
               ? "The git you chose doesn't run. Choose another, or let gitid find git automatically."
               : "gitid couldn't find git. Install it from git-scm.com, or enter where it is below.",
           ),
-          g.error ? el("p", { class: "mono detail" }, g.error) : null,
+          ...gitError(g.error),
         );
 
     const input = el("input", {
@@ -277,7 +279,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
           on: {
             click: async () => {
               try {
-                const picked = await api.pickGitExecutable();
+                const picked = await api.pickGitExecutable(t("dialog.chooseGit"));
                 if (picked) input.value = picked;
               } catch (e) {
                 status = { key, ok: false, text: message(e) };
@@ -340,13 +342,15 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
 }
 
 function message(e: unknown): string {
-  return e instanceof AppError ? sentence(e.message) : String(e);
+  return errorText(e);
 }
 
-function sentence(s: string): string {
-  const first = s.split(/\s/, 1)[0];
-  const t = first.includes(".") || first.includes("/") ? s : s.charAt(0).toUpperCase() + s.slice(1);
-  return /[.!?]$/.test(t) ? t : t + ".";
+/** Why no usable git was found: the message, then git's or the system's own words. */
+function gitError(error: CommandError | null): HTMLElement[] {
+  if (!error) return [];
+  const e = new AppError(error);
+  const detail = errorDetail(e);
+  return [el("p", {}, errorText(e)), ...(detail ? [el("p", { class: "mono detail" }, detail)] : [])];
 }
 
 function failure(e: unknown): HTMLElement {
@@ -354,6 +358,7 @@ function failure(e: unknown): HTMLElement {
     "div",
     { class: "verdict problem", attrs: { role: "alert" } },
     el("p", { class: "lede" }, "Couldn't read your settings."),
-    el("p", { class: "mono detail" }, e instanceof Error ? e.message : String(e)),
+    el("p", {}, errorText(e)),
+    errorDetail(e) ? el("p", { class: "mono detail" }, errorDetail(e)) : null,
   );
 }

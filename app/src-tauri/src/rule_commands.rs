@@ -2,12 +2,13 @@
 
 use std::path::{Path, PathBuf};
 
-use gitid_core::rules::{self, Condition, NewRule, Rule, When};
-use gitid_core::{paths, platform, Error};
+use gitid_core::rules::{self, Condition, Described, NewRule, Rule, When};
+use gitid_core::{paths, platform, Error, Invalid};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::commands::{blocking, CmdResult};
+use crate::commands::blocking;
+use crate::error::CmdResult;
 use crate::state::AppState;
 
 /// One "applies to" line of the rule form. The same shape goes to the
@@ -64,15 +65,15 @@ impl From<WhenDto> for When {
 pub struct RuleView {
     #[serde(flatten)]
     rule: Rule,
-    /// One readable line per folder or server.
-    description: Vec<String>,
+    /// One line per folder or server, as data the frontend phrases.
+    lines: Vec<Described>,
     /// The form inputs that recreate this rule.
     when: Vec<WhenDto>,
 }
 
 fn view(rule: Rule, home: Option<&Path>) -> RuleView {
     RuleView {
-        description: rules::describe(&rule.conditions),
+        lines: rules::described(&rule.conditions),
         when: rules::when_from(&rule, home)
             .into_iter()
             .map(Into::into)
@@ -197,6 +198,13 @@ pub async fn save_rule(state: State<'_, AppState>, input: RuleInput) -> CmdResul
     .await
 }
 
+fn no_such_rule(all: &[Rule], id: &str) -> Error {
+    Error::Invalid(Invalid::NoSuchRule {
+        id: id.to_string(),
+        known: all.iter().map(|r| r.id.clone()).collect(),
+    })
+}
+
 /// Remove a rule; with `delete_file`, also the identity file gitid created.
 #[tauri::command]
 pub async fn remove_rule(
@@ -208,8 +216,7 @@ pub async fn remove_rule(
         let (git, _) = state.git()?;
         blocking(move || {
             let all = rules::list_rules(&git)?;
-            let rule = rules::find(&all, &id)
-                .ok_or_else(|| Error::InvalidInput(format!("there is no rule {id:?}")))?;
+            let rule = rules::find(&all, &id).ok_or_else(|| no_such_rule(&all, &id))?;
             rules::remove_rule(&git, rule, delete_file)?;
             Ok(())
         })
@@ -226,8 +233,7 @@ pub async fn check_rule(state: State<'_, AppState>, id: String, path: String) ->
         let given = PathBuf::from(&path);
         let folder = paths::canonicalize(&given).map_err(|_| Error::NotADirectory(given))?;
         let all = rules::list_rules(&git)?;
-        let rule = rules::find(&all, &id)
-            .ok_or_else(|| Error::InvalidInput(format!("there is no rule {id:?}")))?;
+        let rule = rules::find(&all, &id).ok_or_else(|| no_such_rule(&all, &id))?;
         Ok(Check {
             applies: rules::applies_in(&git, rule, &folder)?,
             path: folder,

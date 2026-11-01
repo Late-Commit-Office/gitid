@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::error::{last_meaningful_line, Error, Result};
+use crate::error::{last_meaningful_line, Error, Invalid, Result};
 use crate::git::{Git, Output};
 use crate::repo;
 
@@ -45,8 +45,11 @@ impl Target {
 }
 
 pub(crate) fn path_str(p: &Path) -> Result<&str> {
-    p.to_str()
-        .ok_or_else(|| Error::InvalidInput(format!("path is not valid UTF-8: {}", p.display())))
+    p.to_str().ok_or_else(|| {
+        Error::from(Invalid::PathNotUtf8 {
+            path: p.to_path_buf(),
+        })
+    })
 }
 
 /// Set a single-valued key. Fails with [`Error::MultipleValues`] if the key
@@ -130,7 +133,7 @@ fn run_write(
     kind: WriteKind,
 ) -> Result<bool> {
     if key.trim().is_empty() {
-        return Err(Error::InvalidInput("config key is empty".into()));
+        return Err(Invalid::EmptyKey.into());
     }
     if let Target::Local(dir) = target {
         if repo::discover(git, dir)?.is_none() {
@@ -167,7 +170,11 @@ fn classify_failure(args: &[&str], key: &str, out: Output, kind: WriteKind) -> R
         Some(1) | Some(2) if stderr.contains("key") || stderr.contains("section") => {
             let msg = last_meaningful_line(&out.stderr);
             let msg = msg.strip_prefix("error: ").unwrap_or(msg);
-            Err(Error::InvalidInput(msg.to_string()))
+            Err(Invalid::BadKey {
+                key: key.into(),
+                detail: msg.to_string(),
+            }
+            .into())
         }
         _ => Err(Error::GitFailed {
             args: args.iter().map(|s| s.to_string()).collect(),

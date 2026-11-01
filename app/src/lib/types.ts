@@ -61,10 +61,10 @@ export type Warning =
   | { kind: "authorCommitterDiffer" }
   | { kind: "guessingAllowed" };
 
+/** Also carries an English `message`, for the CLI's JSON; the app phrases warnings itself. */
 export interface WarningReport {
   severity: Severity;
   warning: Warning;
-  message: string;
 }
 
 /** Rule ids that supplied each value, if any. */
@@ -93,25 +93,34 @@ export interface GitInfo {
   home: string | null;
 }
 
-/** What a failed command rejects with. */
+/** What a failed command rejects with (app/src-tauri/src/error.rs). */
 export interface CommandError {
+  /** Broad category: "invalid", "gitNotFound", "gitFailed", "internal", ... */
   kind: string;
+  /** What exactly went wrong; its message is the catalog entry `error.<code>`. */
+  code: string;
+  /** The values the message needs, by name. */
+  params: Record<string, ErrorParam>;
+  /** English, for logs and when there's no catalog entry. */
   message: string;
+  /** git's or the operating system's own words, shown as they are. */
+  detail: string | null;
 }
+
+export type ErrorParam = string | number | null | string[];
 
 // ---------------------------------------------------------------- settings
 
 export type SettingKind =
   | { kind: "bool"; default: boolean }
   | { kind: "text"; placeholder: string }
-  | { kind: "choice"; choices: { value: string; label: string }[]; default: string };
+  | { kind: "choice"; choices: { value: string }[]; default: string };
 
 export type SettingGroup = "identity" | "defaults" | "signing";
 
+/** The JSON also has an English `label` and `help`, for the CLI; the app uses `key`. */
 export interface SettingValue {
   key: string;
-  label: string;
-  help: string;
   group: SettingGroup;
   kind: SettingKind;
   /** null when the global config doesn't set it (git's default applies). */
@@ -124,7 +133,8 @@ export interface GitLocation {
   chosen: string | null;
   path: string | null;
   version: string | null;
-  error: string | null;
+  /** Why no usable git was found. */
+  error: CommandError | null;
 }
 
 export interface SettingsView {
@@ -140,6 +150,11 @@ export type Condition =
   | { kind: "folder"; pattern: string; caseInsensitive: boolean }
   | { kind: "remoteUrl"; pattern: string }
   | { kind: "other"; raw: string };
+
+/** A line of a rule's description: a whole server, or one condition. */
+export type Described =
+  | { kind: "server"; host: string; sshPort: string | null }
+  | { kind: "condition"; condition: Condition };
 
 /** One "applies to" line of the rule form; sent back unchanged when saving. */
 export type When =
@@ -158,7 +173,8 @@ export interface RuleView {
   email: string | null;
   /** Created by gitid; others can be removed but not edited. */
   managed: boolean;
-  description: string[];
+  /** One per folder or server, in order. */
+  lines: Described[];
   when: When[];
 }
 

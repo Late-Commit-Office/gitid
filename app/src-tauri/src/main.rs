@@ -8,6 +8,7 @@
 //! goes through git.
 
 mod commands;
+mod error;
 mod rule_commands;
 mod scan_commands;
 mod scope_commands;

@@ -2,6 +2,8 @@
 // system, global and repository config, and which value git actually uses.
 
 import { api, AppError } from "../lib/api";
+import { t } from "../lib/i18n";
+import { errorText } from "../lib/messages";
 import { append, clear, el } from "../lib/dom";
 import { basename, tilde } from "../lib/paths";
 import { recentFolders } from "../lib/recent";
@@ -61,7 +63,7 @@ export function mountScopesView(root: HTMLElement): void {
     } catch (e) {
       notice = { ok: false, text: message(e) };
       // The value may have changed underneath us: reload so the list is current.
-      if (e instanceof AppError && e.kind === "invalidInput" && /changed since/.test(e.message)) {
+      if (e instanceof AppError && e.code === "staleValue") {
         editing = null;
         await load();
       }
@@ -269,7 +271,7 @@ export function mountScopesView(root: HTMLElement): void {
           class: "primary",
           on: {
             click: async () => {
-              const picked = await api.pickFolder().catch(() => null);
+              const picked = await api.pickFolder(t("dialog.chooseFolder")).catch(() => null);
               if (picked) {
                 folder = picked;
                 editing = null;
@@ -345,8 +347,5 @@ export function mountScopesView(root: HTMLElement): void {
 }
 
 function message(e: unknown): string {
-  const text = e instanceof AppError ? e.message : String(e);
-  const first = text.split(/\s/, 1)[0];
-  const t = /[./"`]/.test(first) ? text : text.charAt(0).toUpperCase() + text.slice(1);
-  return /[.!?]$/.test(t) ? t : t + ".";
+  return errorText(e);
 }

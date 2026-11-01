@@ -6,53 +6,16 @@ use std::path::{Path, PathBuf};
 use gitid_core::rules::{self, Rule};
 use gitid_core::settings::{self, SettingValue};
 use gitid_core::{
-    effective_identity, paths, platform, Error, GitVersion, Identity, Part, RoleIdentity, Source,
-    SystemGit, WarningReport,
+    effective_identity, paths, platform, Error, GitVersion, Identity, Invalid, Part, RoleIdentity,
+    Source, SystemGit, WarningReport,
 };
 use serde::Serialize;
+use serde_json::json;
 use tauri::{AppHandle, State, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
 
+use crate::error::{CmdResult, CommandError};
 use crate::state::AppState;
-
-/// Errors as the frontend sees them: a stable `kind` to branch on, and a
-/// sentence to show.
-#[derive(Debug, Serialize)]
-pub struct CommandError {
-    kind: &'static str,
-    message: String,
-}
-
-impl From<Error> for CommandError {
-    fn from(e: Error) -> Self {
-        let kind = match &e {
-            Error::GitNotFound { .. } => "gitNotFound",
-            Error::Spawn { .. } => "gitNotRunnable",
-            Error::NotADirectory(_) => "notADirectory",
-            Error::NotARepository(_) => "notARepository",
-            Error::Unsupported { .. } => "unsupported",
-            Error::InvalidInput(_) => "invalidInput",
-            Error::MultipleValues { .. } => "multipleValues",
-            Error::GitFailed { .. } => "gitFailed",
-            Error::Parse(_) | Error::Io { .. } => "internal",
-        };
-        CommandError {
-            kind,
-            message: e.to_string(),
-        }
-    }
-}
-
-impl From<tauri::Error> for CommandError {
-    fn from(e: tauri::Error) -> Self {
-        CommandError {
-            kind: "internal",
-            message: e.to_string(),
-        }
-    }
-}
-
-pub(crate) type CmdResult<T> = Result<T, CommandError>;
 
 /// Run blocking git work off the async runtime's worker threads.
 pub(crate) async fn blocking<T: Send + 'static>(
@@ -60,10 +23,7 @@ pub(crate) async fn blocking<T: Send + 'static>(
 ) -> CmdResult<T> {
     tauri::async_runtime::spawn_blocking(f)
         .await
-        .map_err(|e| CommandError {
-            kind: "internal",
-            message: e.to_string(),
-        })?
+        .map_err(CommandError::internal)?
 }
 
 // ---------------------------------------------------------------- git_info
@@ -163,13 +123,18 @@ fn real(p: &Path) -> PathBuf {
 /// Show the native folder picker. `None` if the user cancels.
 ///
 /// Done from Rust rather than the dialog plugin's JS API, so the webview
-/// itself needs no dialog permissions.
+/// itself needs no dialog permissions. The frontend sends the title, already
+/// in the user's language.
 #[tauri::command]
-pub async fn pick_folder(app: AppHandle, window: WebviewWindow) -> CmdResult<Option<String>> {
+pub async fn pick_folder(
+    app: AppHandle,
+    window: WebviewWindow,
+    title: String,
+) -> CmdResult<Option<String>> {
     let picked = app
         .dialog()
         .file()
-        .set_title("Choose a folder")
+        .set_title(title)
         .set_parent(&window)
         .blocking_pick_folder();
     Ok(picked
@@ -189,7 +154,7 @@ pub struct GitLocation {
     path: Option<PathBuf>,
     version: Option<String>,
     /// Why no usable git was found.
-    error: Option<String>,
+    error: Option<CommandError>,
 }
 
 #[derive(Serialize)]
@@ -223,7 +188,7 @@ fn view_for(chosen: Option<PathBuf>) -> CmdResult<SettingsView> {
                 chosen,
                 path: None,
                 version: None,
-                error: Some(e.to_string()),
+                error: Some(e.into()),
             },
             global_file: None,
             settings: Vec::new(),
@@ -269,19 +234,14 @@ pub async fn set_git_path(
     if let Some(p) = chosen.clone() {
         blocking(move || {
             let git = SystemGit::locate(Some(&p))?;
-            GitVersion::detect(&git).map_err(|_| {
-                Error::InvalidInput(format!("{} doesn't look like git", p.display()))
-            })?;
+            GitVersion::detect(&git).map_err(|_| Invalid::NotGit { path: p.clone() })?;
             Ok(())
         })
         .await?;
     }
     state
         .set_git_override(chosen.clone())
-        .map_err(|e| CommandError {
-            kind: "internal",
-            message: format!("couldn't save the app's settings: {e}"),
-        })?;
+        .map_err(CommandError::save_settings)?;
     blocking(move || view_for(chosen)).await
 }
 
@@ -298,13 +258,16 @@ pub fn get_language(state: State<'_, AppState>) -> Option<String> {
 pub fn set_language(state: State<'_, AppState>, language: Option<String>) -> CmdResult<()> {
     if let Some(tag) = &language {
         if !is_language_tag(tag) {
-            return Err(Error::InvalidInput(format!("{tag:?} isn't a language tag")).into());
+            return Err(CommandError::invalid(
+                "badLanguageTag",
+                json!({ "tag": tag }),
+                format!("{tag:?} isn't a language tag"),
+            ));
         }
     }
-    state.set_language(language).map_err(|e| CommandError {
-        kind: "internal",
-        message: format!("couldn't save the app's settings: {e}"),
-    })
+    state
+        .set_language(language)
+        .map_err(CommandError::save_settings)
 }
 
 /// A BCP 47-shaped tag: letters, digits and hyphens, starting with a letter.
@@ -314,16 +277,18 @@ fn is_language_tag(tag: &str) -> bool {
         && tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
-/// Native file picker for the git program. `None` if cancelled.
+/// Native file picker for the git program. `None` if cancelled. The
+/// frontend sends the title, already in the user's language.
 #[tauri::command]
 pub async fn pick_git_executable(
     app: AppHandle,
     window: WebviewWindow,
+    title: String,
 ) -> CmdResult<Option<String>> {
     let picked = app
         .dialog()
         .file()
-        .set_title("Choose the git program")
+        .set_title(title)
         .set_parent(&window)
         .blocking_pick_file();
     Ok(picked

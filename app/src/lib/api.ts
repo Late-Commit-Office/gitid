@@ -4,6 +4,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   AddTo,
   CommandError,
+  ErrorParam,
   GitInfo,
   IdentityView,
   RuleCheck,
@@ -17,25 +18,33 @@ import type {
   ValueRef,
 } from "./types";
 
+/** A failed command. `message` is English; show errors with errorText() from lib/errors. */
 export class AppError extends Error {
-  constructor(
-    readonly kind: string,
-    message: string,
-  ) {
-    super(message);
+  readonly kind: string;
+  readonly code: string;
+  readonly params: Record<string, ErrorParam>;
+  readonly detail: string | null;
+
+  constructor(e: CommandError) {
+    super(e.message);
+    this.kind = e.kind;
+    this.code = e.code;
+    this.params = e.params ?? {};
+    this.detail = e.detail ?? null;
   }
 }
 
 function isCommandError(e: unknown): e is CommandError {
-  return typeof e === "object" && e !== null && "kind" in e && "message" in e;
+  return typeof e === "object" && e !== null && "kind" in e && "code" in e && "message" in e;
 }
 
 async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   try {
     return await invoke<T>(command, args);
   } catch (e) {
-    if (isCommandError(e)) throw new AppError(e.kind, e.message);
-    throw new AppError("internal", String(e));
+    if (isCommandError(e)) throw new AppError(e);
+    const text = String(e);
+    throw new AppError({ kind: "internal", code: "internal", params: {}, message: text, detail: text });
   }
 }
 
@@ -43,7 +52,7 @@ export const api = {
   gitInfo: () => call<GitInfo>("git_info"),
   identity: (path: string) => call<IdentityView>("get_identity", { path }),
   /** Native folder picker; null if cancelled. */
-  pickFolder: () => call<string | null>("pick_folder"),
+  pickFolder: (title: string) => call<string | null>("pick_folder", { title }),
 
   settings: () => call<SettingsView>("get_settings"),
   /** null (or git's default) removes the setting. Returns the updated view. */
@@ -51,7 +60,7 @@ export const api = {
     call<SettingsView>("set_setting", { key, value }),
   /** null: find git automatically again. */
   setGitPath: (path: string | null) => call<SettingsView>("set_git_path", { path }),
-  pickGitExecutable: () => call<string | null>("pick_git_executable"),
+  pickGitExecutable: (title: string) => call<string | null>("pick_git_executable", { title }),
   /** The language chosen in Settings; null follows the system. */
   language: () => call<string | null>("get_language"),
   setLanguage: (language: string | null) => call<void>("set_language", { language }),

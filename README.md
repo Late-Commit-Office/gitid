@@ -79,11 +79,13 @@ crates/core    gitid-core: all logic, no UI
   secrets.rs   masks credentials before display
 crates/cli     gitid binary (clap)
 app/           desktop app frontend: plain TypeScript, built with Vite
-  src/lib/     api.ts (typed calls to Rust), types.ts (the JSON shapes), i18n.ts (t(), plurals, language choice), dom.ts, paths.ts, recent.ts
+  src/lib/     api.ts (typed calls to Rust), types.ts (the JSON shapes), i18n.ts (t(), plurals, language choice), messages.ts (words for errors, warnings, rules, settings), dom.ts, paths.ts, recent.ts
   src/locales/ en.json (source and fallback), zh-Hans.json
   src/views/   identity.ts, scan.ts, rules.ts, scopes.ts (All config), settings.ts
-app/src-tauri/ desktop app backend: commands.rs, rule_commands.rs, scope_commands.rs, scan_commands.rs (the only calls the UI can make), state.rs (which git and the language; saved settings.json)
+app/src-tauri/ desktop app backend: commands.rs, rule_commands.rs, scope_commands.rs, scan_commands.rs (the only calls the UI can make), state.rs (which git and the language; saved settings.json), error.rs (errors as a code + values; the frontend words them)
 ```
+
+The backend never sends the app a sentence to show: errors, warnings, rule descriptions and setting labels arrive as codes and values, and the frontend words them in the user's language (`src/locales/`). Text from git itself (why it refused, a failed command's error) is shown as it is, under gitid's own sentence. The CLI and its `--json` output stay in English.
 
 The app's webview gets no plugin permissions: it can only call gitid's own commands, and even the folder picker is opened from Rust. Text from config is only ever inserted as text, never as HTML.
 

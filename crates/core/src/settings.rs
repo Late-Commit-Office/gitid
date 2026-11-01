@@ -5,7 +5,7 @@
 //! be changed with [`crate::config::set`]; they just get no special treatment.
 
 use crate::config::{self, Origin, Target};
-use crate::error::{Error, Result};
+use crate::error::{Error, Invalid, Result};
 use crate::git::Git;
 
 /// How a setting is edited.
@@ -193,23 +193,22 @@ pub fn read(git: &dyn Git) -> Result<Vec<SettingValue>> {
 /// `Ok(None)` means "remove the line" (empty text, or git's default).
 pub fn normalize(git: &dyn Git, setting: &Setting, value: &str) -> Result<Option<String>> {
     let v = value.trim();
-    let bad = |msg: String| Err(Error::InvalidInput(msg));
+    let bad = |why: Invalid| Err(Error::Invalid(why));
+    let key = || setting.key.to_string();
     match setting.kind {
         Kind::Bool { default } => {
             let b = match config::parse_bool(v) {
                 Some(b) if !v.is_empty() => b,
-                _ => return bad(format!("{} must be true or false", setting.key)),
+                _ => return bad(Invalid::NotBool { key: key() }),
             };
             Ok((b != default).then(|| b.to_string()))
         }
         Kind::Choice { choices, default } => {
             if !choices.iter().any(|c| c.value == v) {
-                let allowed: Vec<&str> = choices.iter().map(|c| c.value).collect();
-                return bad(format!(
-                    "{} must be one of: {}",
-                    setting.key,
-                    allowed.join(", ")
-                ));
+                return bad(Invalid::NotOneOf {
+                    key: key(),
+                    allowed: choices.iter().map(|c| c.value.to_string()).collect(),
+                });
             }
             Ok((v != default).then(|| v.to_string()))
         }
@@ -218,16 +217,16 @@ pub fn normalize(git: &dyn Git, setting: &Setting, value: &str) -> Result<Option
                 return Ok(None);
             }
             if v.contains(['\n', '\r']) {
-                return bad(format!("{} can't contain line breaks", setting.label));
+                return bad(Invalid::LineBreak { key: key() });
             }
             match setting.key {
-                "user.name" if v.contains(['<', '>']) => bad("Name can't contain < or >".into()),
+                "user.name" if v.contains(['<', '>']) => bad(Invalid::NameAngleBrackets),
                 "user.email"
                     if !v.contains('@')
                         || v.contains(char::is_whitespace)
                         || v.contains(['<', '>']) =>
                 {
-                    bad(format!("{v:?} doesn't look like an email address"))
+                    bad(Invalid::BadEmail { email: v.into() })
                 }
                 "init.defaultBranch" => {
                     let ok = git
@@ -236,7 +235,7 @@ pub fn normalize(git: &dyn Git, setting: &Setting, value: &str) -> Result<Option
                     if ok {
                         Ok(Some(v.to_string()))
                     } else {
-                        bad(format!("{v:?} isn't a valid branch name"))
+                        bad(Invalid::BadBranchName { name: v.into() })
                     }
                 }
                 _ => Ok(Some(v.to_string())),
@@ -248,9 +247,7 @@ pub fn normalize(git: &dyn Git, setting: &Setting, value: &str) -> Result<Option
 /// Change a managed setting in the global config. `None` (or a value that
 /// normalizes to "remove") deletes it, so git's default applies again.
 pub fn apply(git: &dyn Git, key: &str, value: Option<&str>) -> Result<()> {
-    let setting = find(key).ok_or_else(|| {
-        Error::InvalidInput(format!("{key} is not one of the settings gitid manages"))
-    })?;
+    let setting = find(key).ok_or_else(|| Invalid::UnknownSetting { key: key.into() })?;
     let normalized = match value {
         Some(v) => normalize(git, setting, v)?,
         None => None,

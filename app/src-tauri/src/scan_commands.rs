@@ -8,7 +8,8 @@ use gitid_core::{paths, Error};
 use tauri::ipc::Channel;
 use tauri::State;
 
-use crate::commands::{blocking, CmdResult};
+use crate::commands::blocking;
+use crate::error::CmdResult;
 use crate::state::AppState;
 
 /// Scan `path`. Sends progress on `on_progress` and returns the full report

@@ -1,7 +1,9 @@
 // The rules view: identities that apply in specific folders or for specific
 // servers. List, add, edit, remove, and check where a rule applies.
 
-import { api, AppError } from "../lib/api";
+import { api } from "../lib/api";
+import { t } from "../lib/i18n";
+import { errorText, ruleLine } from "../lib/messages";
 import { append, clear, el } from "../lib/dom";
 import { tilde } from "../lib/paths";
 import type { RuleCheck, RuleView, RulesView, SaveRuleResult, When } from "../lib/types";
@@ -159,7 +161,7 @@ export function mountRulesView(root: HTMLElement): void {
         el("p", { class: "rule-who mono" }, who, el("span", { class: "muted" }, whoNote)),
         actions,
       ),
-      el("ul", { class: "rule-when" }, ...r.description.map((line) => el("li", {}, readable(line)))),
+      el("ul", { class: "rule-when" }, ...r.lines.map((line) => el("li", {}, ruleLine(line)))),
       el(
         "p",
         { class: "muted rule-file" },
@@ -235,7 +237,7 @@ export function mountRulesView(root: HTMLElement): void {
 
   async function checkFolder(r: RuleView): Promise<void> {
     try {
-      const folder = await api.pickFolder();
+      const folder = await api.pickFolder(t("dialog.chooseFolder"));
       if (!folder) return;
       checks.set(r.id, await api.checkRule(r.id, folder));
     } catch (e) {
@@ -425,7 +427,7 @@ export function mountRulesView(root: HTMLElement): void {
           type: "button",
           on: {
             click: async () => {
-              const picked = await api.pickFolder().catch(() => null);
+              const picked = await api.pickFolder(t("dialog.chooseFolder")).catch(() => null);
               if (picked) {
                 w.path = tilde(picked);
                 inp.value = w.path;
@@ -488,13 +490,5 @@ export function mountRulesView(root: HTMLElement): void {
 }
 
 function message(e: unknown): string {
-  const text = e instanceof AppError ? e.message : String(e);
-  const first = text.split(/\s/, 1)[0];
-  const t = first.includes(".") || first.includes("/") || first.startsWith('"') ? text : text.charAt(0).toUpperCase() + text.slice(1);
-  return /[.!?]$/.test(t) ? t : t + ".";
-}
-
-/** Capitalize gitid's own descriptions; leave raw conditions (onbranch:...) as written. */
-function readable(s: string): string {
-  return /^(repos|remote) /.test(s) ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  return errorText(e);
 }

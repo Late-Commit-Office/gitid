@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use gitid_core::rules::{self, Condition, NewRule, Rule, When};
-use gitid_core::{paths, Error, Git, GitVersion, Result, SystemGit};
+use gitid_core::{paths, Error, Git, GitVersion, Invalid, Result, SystemGit};
 
 use crate::args::AddArgs;
 use crate::style;
@@ -151,11 +151,9 @@ pub fn add(git: &SystemGit, version: GitVersion, a: &AddArgs) -> Result<u8> {
 fn lookup(git: &SystemGit, id: &str) -> Result<Rule> {
     let all = rules::list_rules(git)?;
     rules::find(&all, id).cloned().ok_or_else(|| {
-        let ids: Vec<&str> = all.iter().map(|r| r.id.as_str()).collect();
-        Error::InvalidInput(if ids.is_empty() {
-            format!("no rule {id:?}: there are no rules yet")
-        } else {
-            format!("no rule {id:?} (rules: {})", ids.join(", "))
+        Error::Invalid(Invalid::NoSuchRule {
+            id: id.to_string(),
+            known: all.iter().map(|r| r.id.clone()).collect(),
         })
     })
 }

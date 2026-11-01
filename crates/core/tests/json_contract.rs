@@ -237,3 +237,72 @@ fn scan_report_shape() {
     .unwrap();
     assert_eq!(p, json!({ "foldersSeen": 1, "found": 2, "checked": 3 }));
 }
+
+#[test]
+fn described_rule_lines_shape() {
+    let conditions: Vec<rules::Condition> = rules::conditions_for(
+        &When::RemoteHost {
+            host: "gitea.example.com".into(),
+            ssh_port: Some(2222),
+        },
+        None,
+    )
+    .unwrap()
+    .into_iter()
+    .chain([rules::Condition::parse("onbranch:main")])
+    .collect();
+
+    let v = serde_json::to_value(rules::described(&conditions)).unwrap();
+    assert_eq!(
+        v,
+        json!([
+            { "kind": "server", "host": "gitea.example.com", "sshPort": "2222" },
+            { "kind": "condition", "condition": { "kind": "other", "raw": "onbranch:main" } },
+        ])
+    );
+    // The CLI's English lines are built from the same data.
+    assert_eq!(
+        rules::describe(&conditions),
+        [
+            "repos with a remote on gitea.example.com (https, http or ssh), ssh port 2222",
+            "onbranch:main",
+        ]
+    );
+}
+
+/// Input errors reach the app as a code plus the values a message needs.
+#[test]
+fn invalid_input_shape() {
+    use gitid_core::Invalid;
+    let cases = [
+        (Invalid::EmptyKey, json!({ "code": "emptyKey" })),
+        (
+            Invalid::BadEmail {
+                email: "ann".into(),
+            },
+            json!({ "code": "badEmail", "email": "ann" }),
+        ),
+        (
+            Invalid::NotOneOf {
+                key: "pull.rebase".into(),
+                allowed: vec!["false".into(), "true".into()],
+            },
+            json!({ "code": "notOneOf", "key": "pull.rebase", "allowed": ["false", "true"] }),
+        ),
+        (
+            Invalid::NoSuchRule {
+                id: "work".into(),
+                known: vec![],
+            },
+            json!({ "code": "noSuchRule", "id": "work", "known": [] }),
+        ),
+        (Invalid::StaleValue, json!({ "code": "staleValue" })),
+    ];
+    for (why, expected) in cases {
+        assert_eq!(serde_json::to_value(&why).unwrap(), expected, "{why}");
+    }
+    assert_eq!(
+        serde_json::to_value(gitid_core::Feature::RemoteRules).unwrap(),
+        "remoteRules"
+    );
+}

@@ -1,7 +1,9 @@
 // The scan view: find repositories under a folder whose identity is missing,
 // guessed, or not your default, and why.
 
-import { api, AppError } from "../lib/api";
+import { api } from "../lib/api";
+import { t } from "../lib/i18n";
+import { errorText } from "../lib/messages";
 import { append, clear, el } from "../lib/dom";
 import { tilde } from "../lib/paths";
 import type { Finding, Reason, ScanProgress, ScanReport } from "../lib/types";
@@ -57,7 +59,7 @@ export function mountScanView(root: HTMLElement, options: ScanOptions): void {
       });
       saveRoot(folder);
     } catch (e) {
-      error = e instanceof AppError ? e.message : String(e);
+      error = errorText(e);
     } finally {
       running = false;
       render();
@@ -128,7 +130,7 @@ export function mountScanView(root: HTMLElement, options: ScanOptions): void {
             attrs: running ? { disabled: "" } : {},
             on: {
               click: async () => {
-                const picked = await api.pickFolder().catch(() => null);
+                const picked = await api.pickFolder(t("dialog.chooseFolder")).catch(() => null);
                 if (picked) {
                   folder = picked;
                   report = null;

@@ -21,7 +21,7 @@ pub mod secrets;
 pub mod settings;
 
 pub use config::{ConfigSnapshot, Entry, Origin, Scope};
-pub use error::{Error, Result};
+pub use error::{Error, Feature, Invalid, Result};
 pub use git::{Git, GitVersion, SystemGit};
 pub use identity::{
     effective_identity, Field, Identity, IdentityReport, Part, Role, RoleIdentity, Severity,

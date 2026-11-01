@@ -9,7 +9,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::config::{self, Entry, Target};
-use crate::error::{Error, Result};
+use crate::error::{Error, Feature, Invalid, Result};
 use crate::git::{Git, GitVersion};
 use crate::{paths, platform};
 
@@ -269,7 +269,7 @@ pub fn conditions_for(when: &When, home: Option<&Path>) -> Result<Vec<Condition>
         When::RemotePattern(p) => {
             let p = p.trim();
             if p.is_empty() {
-                return Err(Error::InvalidInput("remote pattern is empty".into()));
+                return Err(Invalid::EmptyPattern.into());
             }
             Ok(vec![Condition::RemoteUrl {
                 pattern: p.to_string(),
@@ -277,7 +277,7 @@ pub fn conditions_for(when: &When, home: Option<&Path>) -> Result<Vec<Condition>
         }
         When::Raw(c) => {
             if c.raw().trim().is_empty() {
-                return Err(Error::InvalidInput("condition is empty".into()));
+                return Err(Invalid::EmptyCondition.into());
             }
             Ok(vec![c.clone()])
         }
@@ -299,13 +299,19 @@ fn clean_host(input: &str) -> Result<(String, String)> {
         || s.contains(|c: char| c.is_whitespace() || "/*?[]\\".contains(c))
         || s.starts_with(':');
     if bad {
-        return Err(Error::InvalidInput(format!(
-            "{input:?} is not a server name (expected something like gitea.example.com or gitea.example.com:3000)"
-        )));
+        return Err(Invalid::BadServer {
+            input: input.to_string(),
+        }
+        .into());
     }
     let bare = match s.rsplit_once(':') {
         Some((h, port)) if port.chars().all(|c| c.is_ascii_digit()) && !port.is_empty() => h,
-        Some(_) => return Err(Error::InvalidInput(format!("bad port in {input:?}"))),
+        Some(_) => {
+            return Err(Invalid::BadPort {
+                input: input.to_string(),
+            }
+            .into())
+        }
         None => s,
     };
     Ok((s.to_string(), bare.to_string()))
@@ -321,30 +327,25 @@ fn check_id(id: &str) -> Result<()> {
     if ok {
         Ok(())
     } else {
-        Err(Error::InvalidInput(format!(
-            "rule id {id:?} must be letters, digits, '-' or '_' (e.g. work, gitea)"
-        )))
+        Err(Invalid::BadRuleId { id: id.to_string() }.into())
     }
 }
 
 fn check_identity(name: Option<&str>, email: Option<&str>) -> Result<()> {
     if name.is_none() && email.is_none() {
-        return Err(Error::InvalidInput(
-            "a rule needs a name, an email, or both".into(),
-        ));
+        return Err(Invalid::RuleNeedsIdentity.into());
     }
     if name.is_some_and(|n| n.trim().is_empty() || n.contains(['<', '>', '\n'])) {
-        return Err(Error::InvalidInput(
-            "name can't be empty or contain <, > or newlines".into(),
-        ));
+        return Err(Invalid::BadRuleName.into());
     }
     if let Some(e) = email {
         let ok =
             e.contains('@') && !e.contains(|c: char| c.is_whitespace() || c == '<' || c == '>');
         if !ok {
-            return Err(Error::InvalidInput(format!(
-                "{e:?} doesn't look like an email address"
-            )));
+            return Err(Invalid::BadEmail {
+                email: e.to_string(),
+            }
+            .into());
         }
     }
     Ok(())
@@ -377,21 +378,17 @@ fn save_rule(git: &dyn Git, version: GitVersion, new: &NewRule, replace: bool) -
     check_id(&new.id)?;
     check_identity(new.name.as_deref(), new.email.as_deref())?;
     if new.when.is_empty() {
-        return Err(Error::InvalidInput(
-            "a rule needs at least one folder or server".into(),
-        ));
+        return Err(Invalid::RuleNeedsWhere.into());
     }
     if new.when.iter().any(needs_hasconfig) && !version.supports_hasconfig() {
         return Err(Error::Unsupported {
-            feature: "matching repos by remote server",
+            feature: Feature::RemoteRules,
             needs: GitVersion::new(2, 36, 0),
             have: version,
         });
     }
 
-    let home = platform::home_dir(git).ok_or_else(|| {
-        Error::InvalidInput("can't find your home folder (HOME is not set)".into())
-    })?;
+    let home = platform::home_dir(git).ok_or(Error::Invalid(Invalid::NoHome))?;
 
     // Work out every condition first, so bad input writes nothing.
     let mut conditions = Vec::new();
@@ -558,20 +555,64 @@ fn group(conditions: &[Condition]) -> Vec<Grouped<'_>> {
     out
 }
 
-/// Human-readable lines for a rule's conditions, one per folder or server.
-pub fn describe(conditions: &[Condition]) -> Vec<String> {
+/// One line of a rule's description, as data: a whole server (the set of
+/// patterns [`When::RemoteHost`] writes), or a single condition.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(
+        tag = "kind",
+        rename_all = "camelCase",
+        rename_all_fields = "camelCase"
+    )
+)]
+pub enum Described {
+    /// Repos with a remote on this server, over https, http or ssh.
+    Server {
+        host: String,
+        ssh_port: Option<String>,
+    },
+    /// Anything else, as git has it.
+    Condition { condition: Condition },
+}
+
+impl fmt::Display for Described {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Described::Server { host, ssh_port } => {
+                write!(f, "repos with a remote on {host} (https, http or ssh)")?;
+                match ssh_port {
+                    Some(port) => write!(f, ", ssh port {port}"),
+                    None => Ok(()),
+                }
+            }
+            Described::Condition { condition } => write!(f, "{condition}"),
+        }
+    }
+}
+
+/// A rule's conditions as a person thinks of them, one per folder or server.
+pub fn described(conditions: &[Condition]) -> Vec<Described> {
     group(conditions)
         .into_iter()
         .map(|g| match g {
-            Grouped::Host { web, ssh_port } => {
-                let mut line = format!("repos with a remote on {web} (https, http or ssh)");
-                if let Some(port) = ssh_port {
-                    line.push_str(&format!(", ssh port {port}"));
-                }
-                line
-            }
-            Grouped::One(c) => c.to_string(),
+            Grouped::Host { web, ssh_port } => Described::Server {
+                host: web,
+                ssh_port,
+            },
+            Grouped::One(c) => Described::Condition {
+                condition: c.clone(),
+            },
         })
+        .collect()
+}
+
+/// Human-readable English lines for a rule's conditions, one per folder or server.
+pub fn describe(conditions: &[Condition]) -> Vec<String> {
+    described(conditions)
+        .iter()
+        .map(ToString::to_string)
         .collect()
 }
 

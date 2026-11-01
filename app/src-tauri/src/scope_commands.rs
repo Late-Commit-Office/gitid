@@ -9,11 +9,12 @@ use std::path::{Path, PathBuf};
 
 use gitid_core::config::{self, ConfigSnapshot, EntryRef, Origin, Scope, Status, Target};
 use gitid_core::secrets::mask_value;
-use gitid_core::{paths, platform, repo, Error, Git, RepoLocation};
+use gitid_core::{paths, platform, repo, Error, Git, Invalid, RepoLocation};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::commands::{blocking, CmdResult};
+use crate::commands::blocking;
+use crate::error::CmdResult;
 use crate::state::AppState;
 
 /// Identifies one value for editing: the n-th value of `key` in `file`.
@@ -154,9 +155,7 @@ fn locate(
     });
     match entry {
         Some(e) => Ok((wanted, e.value.clone())),
-        None => Err(Error::InvalidInput(
-            "that value has changed since the list was loaded; it has been refreshed".into(),
-        )),
+        None => Err(Invalid::StaleValue.into()),
     }
 }
 
@@ -238,9 +237,7 @@ pub async fn add_scope_value(
         let target = match scope {
             AddTo::System => Target::System,
             AddTo::Global => Target::Global,
-            AddTo::Local => Target::Local(folder.clone().ok_or_else(|| {
-                Error::InvalidInput("choose a folder inside a repository first".into())
-            })?),
+            AddTo::Local => Target::Local(folder.clone().ok_or(Invalid::NeedsRepoFolder)?),
         };
         let key = key.trim();
         if config::is_multi_valued(key) {
