@@ -3,19 +3,15 @@
 
 import { api, AppError } from "../lib/api";
 import { append, clear, el } from "../lib/dom";
-import { type LanguageChoice, LOCALE_NAMES, LOCALES, resolveLocale, t } from "../lib/i18n";
+import { type LanguageChoice, type MessageKey, LOCALE_NAMES, LOCALES, resolveLocale, t, tx } from "../lib/i18n";
 import { choiceLabel, errorDetail, errorText, settingHelp, settingLabel, settingPlaceholder } from "../lib/messages";
 import { tilde } from "../lib/paths";
 import type { CommandError, SettingGroup, SettingValue, SettingsView } from "../lib/types";
 
-const GROUPS: { id: SettingGroup; title: string; note?: string }[] = [
-  {
-    id: "identity",
-    title: "Your default identity",
-    note: "Rules and repository settings can still use a different identity in specific folders.",
-  },
-  { id: "defaults", title: "Defaults" },
-  { id: "signing", title: "Commit signing" },
+const GROUPS: { id: SettingGroup; heading: MessageKey; note?: MessageKey }[] = [
+  { id: "identity", heading: "settings.group.identity", note: "settings.group.identity.note" },
+  { id: "defaults", heading: "settings.group.defaults" },
+  { id: "signing", heading: "settings.group.signing" },
 ];
 
 interface Status {
@@ -75,7 +71,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
     clear(body);
     if (!view) return;
     const where = view.globalFile
-      ? el("p", { class: "muted intro" }, "Saved to your global git config, ", el("code", {}, tilde(view.globalFile)), ".")
+      ? el("p", { class: "muted intro" }, tx("settings.savedTo", { file: el("code", {}, tilde(view.globalFile)) }))
       : null;
     append(body, where);
 
@@ -88,8 +84,8 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
           el(
             "section",
             { class: "group" },
-            el("h2", {}, g.title),
-            g.note ? el("p", { class: "muted group-note" }, g.note) : null,
+            el("h2", {}, t(g.heading)),
+            g.note ? el("p", { class: "muted group-note" }, t(g.note)) : null,
             ...rows.map(row),
           ),
         );
@@ -123,7 +119,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
         });
         box.addEventListener("change", () => {
           const next = box.checked;
-          void change(s.key, () => api.setSetting(s.key, String(next)), next ? "Turned on." : "Turned off.");
+          void change(s.key, () => api.setSetting(s.key, String(next)), t(next ? "settings.turnedOn" : "settings.turnedOff"));
         });
         control = box;
         break;
@@ -134,11 +130,11 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
         const select = el("select", { attrs: { id, "data-key": s.key } });
         for (const c of kind.choices) {
           const name = choiceLabel(s.key, c.value);
-          const label = c.value === kind.default ? `${name} (git's default)` : name;
+          const label = c.value === kind.default ? t("settings.gitsDefault", { choice: name }) : name;
           append(select, el("option", { attrs: { value: c.value, ...(c.value === current ? { selected: "" } : {}) } }, label));
         }
         select.addEventListener("change", () => {
-          void change(s.key, () => api.setSetting(s.key, select.value), "Saved.");
+          void change(s.key, () => api.setSetting(s.key, select.value), t("common.saved"));
         });
         control = select;
         break;
@@ -158,7 +154,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
             spellcheck: "false",
           },
         });
-        const save = el("button", { type: "submit" }, "Save");
+        const save = el("button", { type: "submit" }, t("common.save"));
         const unchanged = () => input.value.trim() === (s.value ?? "");
         save.disabled = unchanged();
         input.addEventListener("input", () => {
@@ -170,7 +166,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
           if (save.disabled) return;
           const v = input.value.trim();
           drafts.set(s.key, input.value);
-          void change(s.key, () => api.setSetting(s.key, v === "" ? null : v), v === "" ? "Removed." : "Saved.");
+          void change(s.key, () => api.setSetting(s.key, v === "" ? null : v), t(v === "" ? "common.removed" : "common.saved"));
         });
         control = form;
         break;
@@ -239,9 +235,10 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
       ? el(
           "p",
           { class: "git-summary" },
-          `Using git ${g.version} at `,
-          el("code", {}, tilde(g.path)),
-          g.chosen ? ", which you chose." : ", found automatically.",
+          tx(g.chosen ? "settings.git.usingChosen" : "settings.git.usingFound", {
+            version: g.version ?? "",
+            path: el("code", {}, tilde(g.path)),
+          }),
         )
       : el(
           "div",
@@ -249,9 +246,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
           el(
             "p",
             { class: "problem-text" },
-            g.chosen
-              ? "The git you chose doesn't run. Choose another, or let gitid find git automatically."
-              : "gitid couldn't find git. Install it from git-scm.com, or enter where it is below.",
+            t(g.chosen ? "settings.git.chosenBroken" : "settings.git.notFound"),
           ),
           ...gitError(g.error),
         );
@@ -261,7 +256,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
       class: "mono",
       attrs: {
         "data-key": key,
-        "aria-label": "Path to the git program",
+        "aria-label": t("settings.git.pathLabel"),
         value: drafts.get(key) ?? g.chosen ?? "",
         placeholder: g.path ?? "/usr/local/bin/git",
         autocomplete: "off",
@@ -288,15 +283,15 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
             },
           },
         },
-        "Browse",
+        t("common.browse"),
       ),
-      el("button", { type: "submit" }, "Use this git"),
+      el("button", { type: "submit" }, t("settings.git.use")),
     );
     form.addEventListener("submit", (ev) => {
       ev.preventDefault();
       const p = input.value.trim();
       drafts.set(key, input.value);
-      void change(key, () => api.setGitPath(p === "" ? null : p), p === "" ? "Finding git automatically." : "Saved.").then(
+      void change(key, () => api.setGitPath(p === "" ? null : p), t(p === "" ? "settings.git.findingAuto" : "common.saved")).then(
         () => {
           if (status?.ok) options.onGitChanged();
         },
@@ -311,19 +306,19 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
             class: "link",
             on: {
               click: () =>
-                void change(key, () => api.setGitPath(null), "Finding git automatically.").then(() => {
+                void change(key, () => api.setGitPath(null), t("settings.git.findingAuto")).then(() => {
                   if (status?.ok) options.onGitChanged();
                 }),
             },
           },
-          "Find git automatically instead",
+          t("settings.git.findAuto"),
         )
       : null;
 
     return el(
       "section",
       { class: "group" },
-      el("h2", {}, "git"),
+      el("h2", {}, t("settings.git.title")),
       summary,
       el(
         "div",
@@ -331,7 +326,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
         el(
           "div",
           { class: "row-text" },
-          el("p", { class: "muted help" }, "To use a different git, enter or browse to its program file."),
+          el("p", { class: "muted help" }, t("settings.git.help")),
         ),
         el("div", { class: "row-control" }, form, auto, rowStatus(key)),
       ),
@@ -357,7 +352,7 @@ function failure(e: unknown): HTMLElement {
   return el(
     "div",
     { class: "verdict problem", attrs: { role: "alert" } },
-    el("p", { class: "lede" }, "Couldn't read your settings."),
+    el("p", { class: "lede" }, t("settings.loadFailed")),
     el("p", {}, errorText(e)),
     errorDetail(e) ? el("p", { class: "mono detail" }, errorDetail(e)) : null,
   );

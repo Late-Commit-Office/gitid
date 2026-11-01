@@ -2,23 +2,27 @@
 // system, global and repository config, and which value git actually uses.
 
 import { api, AppError } from "../lib/api";
-import { t } from "../lib/i18n";
-import { errorText } from "../lib/messages";
+import { type MessageKey, t } from "../lib/i18n";
+import { errorDetail, errorText } from "../lib/messages";
 import { append, clear, el } from "../lib/dom";
 import { basename, tilde } from "../lib/paths";
 import { recentFolders } from "../lib/recent";
 import type { AddTo, KeyView, Scope, ScopeValue, ScopesView, ValueRef } from "../lib/types";
 
-const SCOPE_NAME: Record<Scope, string> = {
-  system: "System",
-  global: "Global",
-  local: "Repository",
-  worktree: "Worktree",
-  command: "Command",
-  unknown: "Config",
+const SCOPE_NAME: Record<Scope, MessageKey> = {
+  system: "scopes.scope.system",
+  global: "scopes.scope.global",
+  local: "scopes.scope.local",
+  worktree: "scopes.scope.worktree",
+  command: "scopes.scope.command",
+  unknown: "scopes.scope.unknown",
 };
 
-const STATUS_TEXT = { used: "used", overridden: "overridden", alsoUsed: "used" } as const;
+const STATUS_TEXT: Record<ScopeValue["status"], MessageKey> = {
+  used: "scopes.status.used",
+  overridden: "scopes.status.overridden",
+  alsoUsed: "scopes.status.used",
+};
 
 interface Editing {
   ref: ValueRef;
@@ -27,7 +31,7 @@ interface Editing {
 }
 
 export function mountScopesView(root: HTMLElement): void {
-  const bar = el("section", { class: "folder-bar", attrs: { "aria-label": "Folder" } });
+  const bar = el("section", { class: "folder-bar", attrs: { "aria-label": t("common.folder") } });
   const body = el("div", { class: "scopes" });
   append(root, bar, body);
 
@@ -37,7 +41,7 @@ export function mountScopesView(root: HTMLElement): void {
   let editing: Editing | null = null;
   let adding = false;
   let notice: { ok: boolean; text: string } | null = null;
-  let loadError: string | null = null;
+  let loadError: unknown = null;
 
   const sameRef = (a: ValueRef | null, b: ValueRef | null) =>
     !!a && !!b && a.file === b.file && a.key === b.key && a.nth === b.nth;
@@ -48,7 +52,7 @@ export function mountScopesView(root: HTMLElement): void {
       loadError = null;
     } catch (e) {
       view = null;
-      loadError = message(e);
+      loadError = e;
     }
     render();
   }
@@ -77,18 +81,28 @@ export function mountScopesView(root: HTMLElement): void {
     renderBar();
     clear(body);
     if (loadError) {
-      append(body, el("div", { class: "verdict problem", attrs: { role: "alert" } }, el("p", { class: "lede" }, "Couldn't read the config."), el("p", { class: "mono detail" }, loadError)));
+      const detail = errorDetail(loadError);
+      append(
+        body,
+        el(
+          "div",
+          { class: "verdict problem", attrs: { role: "alert" } },
+          el("p", { class: "lede" }, t("scopes.loadFailed")),
+          el("p", {}, errorText(loadError)),
+          detail ? el("p", { class: "mono detail" }, detail) : null,
+        ),
+      );
       return;
     }
     if (!view) {
-      append(body, el("p", { class: "muted" }, "Loading…"));
+      append(body, el("p", { class: "muted" }, t("common.loading")));
       return;
     }
     const v = view;
 
     const filterInput = el("input", {
       type: "text",
-      attrs: { value: filter, placeholder: "Filter keys and values", "aria-label": "Filter keys and values", spellcheck: "false" },
+      attrs: { value: filter, placeholder: t("scopes.filter"), "aria-label": t("scopes.filter"), spellcheck: "false" },
     });
     filterInput.addEventListener("input", () => {
       filter = filterInput.value;
@@ -99,13 +113,13 @@ export function mountScopesView(root: HTMLElement): void {
       el(
         "p",
         { class: "muted intro" },
-        "git reads the system config, then your global config, then the repository's own. For most keys the last value wins.",
+        t("scopes.intro"),
       ),
       el(
         "div",
         { class: "scopes-tools" },
         filterInput,
-        el("button", { type: "button", on: { click: () => { adding = !adding; render(); } } }, adding ? "Close" : "Add a setting"),
+        el("button", { type: "button", on: { click: () => { adding = !adding; render(); } } }, t(adding ? "scopes.close" : "scopes.add")),
       ),
     );
     if (adding) append(body, addForm(v));
@@ -123,7 +137,7 @@ export function mountScopesView(root: HTMLElement): void {
       (k) => !q || k.key.toLowerCase().includes(q) || k.values.some((x) => (x.value ?? "").toLowerCase().includes(q)),
     );
     if (keys.length === 0) {
-      append(list, el("p", { class: "muted" }, q ? "Nothing matches." : "No git config is set here."));
+      append(list, el("p", { class: "muted" }, t(q ? "scopes.noMatch" : "scopes.nothingSet")));
       return;
     }
     let section = "";
@@ -147,7 +161,7 @@ export function mountScopesView(root: HTMLElement): void {
         "h3",
         { class: "mono key-name" },
         k.key,
-        k.multiValued ? el("span", { class: "muted key-note" }, "a list: every value applies") : null,
+        k.multiValued ? el("span", { class: "muted key-note" }, t("scopes.multiValued")) : null,
       ),
       el("ul", { class: "values" }, ...k.values.map((x) => valueRow(k, x))),
     );
@@ -161,24 +175,24 @@ export function mountScopesView(root: HTMLElement): void {
     const where = el(
       "p",
       { class: "muted where" },
-      file ? el("span", { class: "mono", title: file }, tilde(file)) : x.origin.kind === "commandLine" ? "Set by git -c or GIT_CONFIG_* variables; can't be changed here." : "",
-      x.included ? " (included)" : "",
+      file ? el("span", { class: "mono", title: file }, tilde(file)) : x.origin.kind === "commandLine" ? t("scopes.fromCommand") : "",
+      x.included ? t("scopes.included") : "",
     );
 
     let valueCell: HTMLElement;
     if (isEditing && x.at) {
       const at = x.at;
-      const input = el("input", { type: "text", class: "mono", attrs: { value: x.value ?? "true", "aria-label": `New value for ${k.key}`, spellcheck: "false" } });
+      const input = el("input", { type: "text", class: "mono", attrs: { value: x.value ?? "true", "aria-label": t("scopes.newValue", { key: k.key }), spellcheck: "false" } });
       const form = el(
         "form",
         { class: "text-row" },
         input,
-        el("button", { type: "submit" }, "Save"),
-        el("button", { type: "button", on: { click: () => { editing = null; render(); } } }, "Cancel"),
+        el("button", { type: "submit" }, t("common.save")),
+        el("button", { type: "button", on: { click: () => { editing = null; render(); } } }, t("common.cancel")),
       );
       form.addEventListener("submit", (ev) => {
         ev.preventDefault();
-        void apply(() => api.editScopeValue(folder, at, input.value), `Saved ${k.key} in ${tilde(at.file)}.`);
+        void apply(() => api.editScopeValue(folder, at, input.value), t("scopes.savedIn", { key: k.key, file: tilde(at.file) }));
       });
       queueMicrotask(() => input.focus());
       valueCell = el("div", { class: "value-cell" }, form, where);
@@ -186,7 +200,7 @@ export function mountScopesView(root: HTMLElement): void {
       valueCell = el(
         "div",
         { class: "value-cell" },
-        el("p", { class: `mono value ${x.status === "overridden" ? "is-overridden" : ""}` }, x.value === null ? "true (no value given)" : x.value),
+        el("p", { class: `mono value ${x.status === "overridden" ? "is-overridden" : ""}` }, x.value === null ? t("scopes.noValue") : x.value),
         where,
       );
     }
@@ -195,17 +209,17 @@ export function mountScopesView(root: HTMLElement): void {
     if (x.at && !isEditing && !isRemoving) {
       const at = x.at;
       if (!x.masked) {
-        append(actions, el("button", { type: "button", class: "link", on: { click: () => { editing = { ref: at, removing: false }; notice = null; render(); } } }, "Edit"));
+        append(actions, el("button", { type: "button", class: "link", on: { click: () => { editing = { ref: at, removing: false }; notice = null; render(); } } }, t("common.edit")));
       }
-      append(actions, el("button", { type: "button", class: "link", on: { click: () => { editing = { ref: at, removing: true }; notice = null; render(); } } }, "Remove"));
+      append(actions, el("button", { type: "button", class: "link", on: { click: () => { editing = { ref: at, removing: true }; notice = null; render(); } } }, t("common.remove")));
     }
 
     const row = el(
       "li",
       { class: `value-row status-${x.status}` },
-      el("span", { class: "scope-tag" }, SCOPE_NAME[x.scope]),
+      el("span", { class: "scope-tag" }, t(SCOPE_NAME[x.scope])),
       valueCell,
-      el("span", { class: "status-text" }, STATUS_TEXT[x.status]),
+      el("span", { class: "status-text" }, t(STATUS_TEXT[x.status])),
       actions,
     );
     if (isRemoving && x.at) {
@@ -215,9 +229,23 @@ export function mountScopesView(root: HTMLElement): void {
         el(
           "div",
           { class: "confirm", attrs: { role: "alert" } },
-          el("p", {}, `Remove this value of ${k.key} from ${tilde(at.file)}?`),
-          el("button", { type: "button", class: "danger", on: { click: () => void apply(() => api.removeScopeValue(folder, at), `Removed a value of ${k.key} from ${tilde(at.file)}.`) } }, "Remove"),
-          el("button", { type: "button", on: { click: () => { editing = null; render(); } } }, "Cancel"),
+          el("p", {}, t("scopes.confirmRemove", { key: k.key, file: tilde(at.file) })),
+          el(
+            "button",
+            {
+              type: "button",
+              class: "danger",
+              on: {
+                click: () =>
+                  void apply(
+                    () => api.removeScopeValue(folder, at),
+                    t("scopes.removedFrom", { key: k.key, file: tilde(at.file) }),
+                  ),
+              },
+            },
+            t("common.remove"),
+          ),
+          el("button", { type: "button", on: { click: () => { editing = null; render(); } } }, t("common.cancel")),
         ),
       );
       queueMicrotask(() => row.querySelector<HTMLElement>(".confirm .danger")?.focus());
@@ -226,28 +254,28 @@ export function mountScopesView(root: HTMLElement): void {
   }
 
   function addForm(v: ScopesView): HTMLElement {
-    const scope = el("select", { attrs: { "aria-label": "Where to add it" } });
+    const scope = el("select", { attrs: { "aria-label": t("scopes.addTo.label") } });
     const options: [AddTo, string, boolean][] = [
-      ["global", "Your global config", true],
-      ["local", v.repo ? "This repository" : "This repository (choose a folder in a repo)", v.repo !== null],
-      ["system", "System config (needs admin rights)", true],
+      ["global", t("scopes.addTo.global"), true],
+      ["local", t(v.repo ? "scopes.addTo.local" : "scopes.addTo.localNoRepo"), v.repo !== null],
+      ["system", t("scopes.addTo.system"), true],
     ];
     for (const [value, label, ok] of options) {
       append(scope, el("option", { attrs: { value, ...(ok ? {} : { disabled: "" }) } }, label));
     }
-    const key = el("input", { type: "text", class: "mono", attrs: { placeholder: "section.key, e.g. core.autocrlf", "aria-label": "Key", spellcheck: "false", autocapitalize: "off" } });
-    const value = el("input", { type: "text", class: "mono", attrs: { placeholder: "value", "aria-label": "Value", spellcheck: "false", autocapitalize: "off" } });
-    const form = el("form", { class: "add-form" }, scope, key, value, el("button", { type: "submit", class: "primary" }, "Add"));
+    const key = el("input", { type: "text", class: "mono", attrs: { placeholder: t("scopes.addKey.placeholder"), "aria-label": t("scopes.addKey.label"), spellcheck: "false", autocapitalize: "off" } });
+    const value = el("input", { type: "text", class: "mono", attrs: { placeholder: t("scopes.addValue.placeholder"), "aria-label": t("scopes.addValue.label"), spellcheck: "false", autocapitalize: "off" } });
+    const form = el("form", { class: "add-form" }, scope, key, value, el("button", { type: "submit", class: "primary" }, t("scopes.addButton")));
     form.addEventListener("submit", (ev) => {
       ev.preventDefault();
       const k = key.value.trim();
       if (!k) {
-        notice = { ok: false, text: "Enter a key, like core.autocrlf." };
+        notice = { ok: false, text: t("scopes.needKey") };
         render();
         return;
       }
       const where = scope.value as AddTo;
-      void apply(() => api.addScopeValue(folder, where, k, value.value), `Set ${k}.`).then((ok) => {
+      void apply(() => api.addScopeValue(folder, where, k, value.value), t("scopes.set", { key: k })).then((ok) => {
         if (ok) {
           adding = false;
           filter = k;
@@ -281,12 +309,12 @@ export function mountScopesView(root: HTMLElement): void {
             },
           },
         },
-        "Choose a folder",
+        t("common.chooseFolder"),
       ),
       el(
         "span",
         { class: "current mono", title: folder ?? "" },
-        folder ? tilde(folder) : "No folder: system and global config only",
+        folder ? tilde(folder) : t("scopes.noFolder"),
       ),
     );
     if (folder) {
@@ -305,14 +333,14 @@ export function mountScopesView(root: HTMLElement): void {
               },
             },
           },
-          "Without a folder",
+          t("scopes.withoutFolder"),
         ),
       );
     }
     append(bar, row);
     const others = recentFolders().filter((p) => p !== folder).slice(0, 5);
     if (others.length) {
-      const list = el("ul", { class: "recent", attrs: { "aria-label": "Recent folders" } });
+      const list = el("ul", { class: "recent", attrs: { "aria-label": t("common.recentFolders") } });
       for (const p of others) {
         append(
           list,
@@ -339,7 +367,7 @@ export function mountScopesView(root: HTMLElement): void {
           ),
         );
       }
-      append(bar, el("div", { class: "recent-row" }, el("span", { class: "muted" }, "Recent:"), list));
+      append(bar, el("div", { class: "recent-row" }, el("span", { class: "muted" }, t("common.recent")), list));
     }
   }
 

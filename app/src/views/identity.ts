@@ -2,7 +2,7 @@
 // where each value comes from, and what to fix.
 
 import { api, AppError } from "../lib/api";
-import { t } from "../lib/i18n";
+import { type MessageKey, t, tx } from "../lib/i18n";
 import { asAppError, errorDetail, errorText, warningDetail, warningText } from "../lib/messages";
 import { append, clear, el } from "../lib/dom";
 import { basename, tilde } from "../lib/paths";
@@ -45,7 +45,7 @@ export function mountIdentityView(root: HTMLElement, options: IdentityOptions): 
       if (state.folder) await open(state.folder);
     },
   };
-  const bar = el("section", { class: "folder-bar", attrs: { "aria-label": "Folder" } });
+  const bar = el("section", { class: "folder-bar", attrs: { "aria-label": t("common.folder") } });
   const body = el("section", { class: "result", attrs: { "aria-live": "polite" } });
   append(root, bar, body);
 
@@ -85,7 +85,7 @@ export function mountIdentityView(root: HTMLElement, options: IdentityOptions): 
     const chooseButton = el(
       "button",
       { class: "primary", type: "button", on: { click: () => void choose() } },
-      state.folder ? "Choose another folder" : "Choose a folder",
+      t(state.folder ? "common.chooseAnother" : "common.chooseFolder"),
     );
     const row = el("div", { class: "bar-row" }, chooseButton);
     if (state.folder) {
@@ -96,11 +96,11 @@ export function mountIdentityView(root: HTMLElement, options: IdentityOptions): 
           "button",
           {
             type: "button",
-            title: "Check this folder again",
+            title: t("identity.refreshTitle"),
             attrs: state.loading ? { disabled: "" } : {},
             on: { click: () => state.folder && void open(state.folder) },
           },
-          "Refresh",
+          t("identity.refresh"),
         ),
       );
     }
@@ -108,7 +108,7 @@ export function mountIdentityView(root: HTMLElement, options: IdentityOptions): 
 
     const others = recentFolders().filter((p) => p !== state.folder);
     if (others.length > 0) {
-      const list = el("ul", { class: "recent", attrs: { "aria-label": "Recent folders" } });
+      const list = el("ul", { class: "recent", attrs: { "aria-label": t("common.recentFolders") } });
       for (const p of others) {
         append(
           list,
@@ -119,7 +119,7 @@ export function mountIdentityView(root: HTMLElement, options: IdentityOptions): 
           ),
         );
       }
-      append(bar, el("div", { class: "recent-row" }, el("span", { class: "muted" }, "Recent:"), list));
+      append(bar, el("div", { class: "recent-row" }, el("span", { class: "muted" }, t("common.recent")), list));
     }
   }
 
@@ -127,7 +127,7 @@ export function mountIdentityView(root: HTMLElement, options: IdentityOptions): 
     clear(body);
     body.setAttribute("aria-busy", String(state.loading));
     if (state.loading) {
-      append(body, el("p", { class: "muted" }, "Checking…"));
+      append(body, el("p", { class: "muted" }, t("identity.checking")));
       return;
     }
     if (state.error) {
@@ -152,40 +152,39 @@ function emptyState(): HTMLElement {
   return el(
     "div",
     { class: "empty" },
-    el("p", { class: "lede" }, "Pick a folder to see who your commits there will be from."),
-    el(
-      "p",
-      { class: "muted" },
-      "Any folder works: a repository, a folder of repositories, or one where you're about to create a repo.",
-    ),
+    el("p", { class: "lede" }, t("identity.empty.lede")),
+    el("p", { class: "muted" }, t("identity.empty.body")),
   );
 }
 
 function errorPanel(e: AppError): HTMLElement {
-  const text: Record<string, string> = {
-    notADirectory: "This folder no longer exists. Choose another one.",
-    gitNotFound: "git wasn't found on this computer. Install git, then reopen gitid.",
+  // These two say all there is to say; anything else gets the error's own words too.
+  const known: Record<string, MessageKey> = {
+    notADirectory: "identity.error.gone",
+    gitNotFound: "identity.error.noGit",
   };
+  const own = known[e.kind];
+  const detail = own ? null : errorDetail(e);
   return el(
     "div",
     { class: "verdict problem", attrs: { role: "alert" } },
-    el("p", { class: "lede" }, text[e.kind] ?? "Couldn't check this folder."),
-    text[e.kind] ? null : el("p", {}, errorText(e)),
-    text[e.kind] || !errorDetail(e) ? null : el("p", { class: "mono detail" }, errorDetail(e)),
+    el("p", { class: "lede" }, t(own ?? "identity.error.generic")),
+    own ? null : el("p", {}, errorText(e)),
+    detail ? el("p", { class: "mono detail" }, detail) : null,
   );
 }
 
 function identityPanel(v: IdentityView, actions: Actions): HTMLElement[] {
-  const out: HTMLElement[] = [verdict(v), roleBlock("Author", v.author, v.authorRules)];
+  const out: HTMLElement[] = [verdict(v), roleBlock(t("identity.author"), v.author, v.authorRules)];
   if (sameIdentity(v.author, v.committer)) {
-    out.push(el("p", { class: "muted committer-same" }, "The committer is the same as the author."));
+    out.push(el("p", { class: "muted committer-same" }, t("identity.committerSame")));
   } else {
-    out.push(roleBlock("Committer", v.committer, v.committerRules));
+    out.push(roleBlock(t("identity.committer"), v.committer, v.committerRules));
   }
   const problems = v.warnings.filter((w) => w.severity === "problem");
   const notes = v.warnings.filter((w) => w.severity === "note");
-  if (problems.length) out.push(issues("To fix", problems, "problem", v, actions));
-  if (notes.length) out.push(issues("Worth knowing", notes, "note", v, actions));
+  if (problems.length) out.push(issues(t("identity.toFix"), problems, "problem", v, actions));
+  if (notes.length) out.push(issues(t("identity.worthKnowing"), notes, "note", v, actions));
   out.push(environment(v));
   return out;
 }
@@ -195,14 +194,10 @@ function verdict(v: IdentityView): HTMLElement {
   const failing = a.error !== null;
   const tone = v.hasProblems ? "problem" : "ok";
   const where = v.repo
-    ? `${failing ? "In" : "Applies in"} the repository ${tilde(v.repo.workTree ?? v.repo.gitDir)}.`
-    : "This folder isn't a repository, so this is what a new repo here would use.";
+    ? t(failing ? "identity.where.repoFailing" : "identity.where.repo", { repo: tilde(v.repo.workTree ?? v.repo.gitDir) })
+    : t("identity.where.noRepo");
 
-  const lede = failing
-    ? "Commits here will fail: git has no identity to use."
-    : v.hasProblems
-      ? "Commits here will use an identity git made up:"
-      : "Commits here will be made as";
+  const lede = t(failing ? "identity.lede.failing" : v.hasProblems ? "identity.lede.madeUp" : "identity.lede.ok");
 
   return el(
     "div",
@@ -228,37 +223,37 @@ function roleBlock(title: string, r: RoleIdentity, rules: RoleRules): HTMLElemen
     const field = r[part];
     append(
       rows,
-      el("dt", {}, part === "name" ? "Name" : "Email"),
-      el("dd", { class: "value mono" }, field ? field.value : el("span", { class: "missing" }, "not set")),
-      el("dd", { class: "source" }, field ? sourceOf(field, rules[part]) : "nothing configured"),
+      el("dt", {}, t(part === "name" ? "identity.name" : "identity.email")),
+      el("dd", { class: "value mono" }, field ? field.value : el("span", { class: "missing" }, t("identity.notSet"))),
+      el("dd", { class: "source" }, field ? sourceOf(field, rules[part]) : t("identity.nothingConfigured")),
     );
   }
   return el("section", { class: "role" }, el("h2", {}, title), rows);
 }
 
-const scopeText: Record<Scope, string> = {
-  system: "System config",
-  global: "Your global config",
-  local: "This repository's config",
-  worktree: "This worktree's config",
-  command: "Set by git -c or GIT_CONFIG_* variables",
-  unknown: "Config file",
+const scopeText: Record<Scope, MessageKey> = {
+  system: "identity.source.system",
+  global: "identity.source.global",
+  local: "identity.source.local",
+  worktree: "identity.source.worktree",
+  command: "identity.source.command",
+  unknown: "identity.source.unknown",
 };
 
 function sourceOf(field: Field, ruleId: string | null): HTMLElement {
   const s: Source = field.source;
   switch (s.kind) {
     case "env":
-      return el("span", {}, "Environment variable ", el("code", {}, s.var));
+      return el("span", {}, tx("identity.source.env", { var: el("code", {}, s.var) }));
     case "guessed":
-      return el("span", { class: "problem-text" }, "Made up by git from your computer's login. Not configured.");
+      return el("span", { class: "problem-text" }, t("identity.source.guessed"));
     case "config": {
       const file = s.origin.kind === "file" ? s.origin.value : null;
       return el(
         "span",
         {},
-        ruleId ? `${scopeText[s.scope]}, through the rule “${ruleId}”` : scopeText[s.scope],
-        s.key.startsWith("user.") ? null : el("span", { class: "muted" }, ` (${s.key})`),
+        ruleId ? t("identity.source.viaRule", { scope: t(scopeText[s.scope]), rule: ruleId }) : t(scopeText[s.scope]),
+        s.key.startsWith("user.") ? null : el("span", { class: "muted" }, t("identity.source.key", { key: s.key })),
         file ? el("span", { class: "file mono", title: file }, tilde(file)) : null,
       );
     }
@@ -268,30 +263,37 @@ function sourceOf(field: Field, ruleId: string | null): HTMLElement {
 /** A button that fixes the problem, or opens the place to fix it. */
 function fixFor(w: WarningReport, v: IdentityView, actions: Actions): HTMLElement | null {
   const W = w.warning;
-  const settingsButton = (what: string) =>
-    el("button", { type: "button", on: { click: actions.openSettings } }, `Set your ${what} in Settings`);
+  const settingsButton = (label: MessageKey) =>
+    el("button", { type: "button", on: { click: actions.openSettings } }, t(label));
   switch (W.kind) {
     case "missing": {
       // Name only what is actually missing for that role.
       const r = W.role === "author" ? v.author : v.committer;
-      const parts = [r.name ? null : "name", r.email ? null : "email"].filter((x): x is string => x !== null);
-      return settingsButton(parts.length ? parts.join(" and ") : "name and email");
+      if (r.name && !r.email) return settingsButton("identity.fix.email");
+      if (r.email && !r.name) return settingsButton("identity.fix.name");
+      return settingsButton("identity.fix.both");
     }
     case "guessed":
-      return settingsButton(W.part);
+      return settingsButton(W.part === "name" ? "identity.fix.name" : "identity.fix.email");
     case "guessingAllowed": {
-      const button = el("button", { type: "button" }, "Turn this on");
+      const button = el("button", { type: "button" }, t("identity.fix.turnOn"));
       button.addEventListener("click", async () => {
         button.disabled = true;
         try {
           await actions.turnOnGuard();
         } catch (e) {
           button.disabled = false;
-          button.textContent = "Couldn't turn it on";
+          button.textContent = t("identity.fix.turnOnFailed");
           button.title = errorText(e);
         }
       });
-      return el("span", {}, button, el("span", { class: "muted fix-note" }, " Sets user.useConfigOnly in your global config."));
+      return el(
+        "span",
+        {},
+        button,
+        " ",
+        el("span", { class: "muted fix-note" }, tx("identity.fix.turnOnNote", { key: el("code", {}, "user.useConfigOnly") })),
+      );
     }
     default:
       return null;
@@ -327,19 +329,20 @@ function environment(v: IdentityView): HTMLElement {
   const note = el(
     "p",
     { class: "muted footnote" },
-    "Variables like GIT_AUTHOR_NAME set in a terminal override all of this, and this app can't see them. To check a terminal, run ",
-    el("code", {}, "git var GIT_AUTHOR_IDENT"),
-    " in it.",
+    tx("identity.env.note", {
+      example: el("code", {}, "GIT_AUTHOR_NAME"),
+      command: el("code", {}, "git var GIT_AUTHOR_IDENT"),
+    }),
   );
   if (v.env.length === 0) return note;
   const rows = el("dl", { class: "env" });
   for (const e of v.env) {
-    append(rows, el("dt", { class: "mono" }, e.name), el("dd", { class: "mono" }, e.sensitive ? "(set, value hidden)" : e.value));
+    append(rows, el("dt", { class: "mono" }, e.name), el("dd", { class: "mono" }, e.sensitive ? t("identity.env.hidden") : e.value));
   }
   return el(
     "section",
     { class: "env-block" },
-    el("h2", {}, "Environment this app sees"),
+    el("h2", {}, t("identity.env.title")),
     rows,
     note,
   );

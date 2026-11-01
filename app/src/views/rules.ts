@@ -2,8 +2,8 @@
 // servers. List, add, edit, remove, and check where a rule applies.
 
 import { api } from "../lib/api";
-import { t } from "../lib/i18n";
-import { errorText, ruleLine } from "../lib/messages";
+import { type MessageKey, formatNumber, t, tx } from "../lib/i18n";
+import { errorDetail, errorText, ruleLine } from "../lib/messages";
 import { append, clear, el } from "../lib/dom";
 import { tilde } from "../lib/paths";
 import type { RuleCheck, RuleView, RulesView, SaveRuleResult, When } from "../lib/types";
@@ -31,14 +31,14 @@ export function mountRulesView(root: HTMLElement): void {
   let confirming: string | null = null;
   /** Per-rule result of "Check a folder". */
   const checks = new Map<string, RuleCheck | string>();
-  let loadError: string | null = null;
+  let loadError: unknown = null;
 
   async function load(): Promise<void> {
     try {
       data = await api.rules();
       loadError = null;
     } catch (e) {
-      loadError = message(e);
+      loadError = e;
     }
     render();
   }
@@ -46,11 +46,21 @@ export function mountRulesView(root: HTMLElement): void {
   function render(): void {
     clear(body);
     if (loadError) {
-      append(body, el("div", { class: "verdict problem", attrs: { role: "alert" } }, el("p", { class: "lede" }, "Couldn't read your rules."), el("p", { class: "mono detail" }, loadError)));
+      const detail = errorDetail(loadError);
+      append(
+        body,
+        el(
+          "div",
+          { class: "verdict problem", attrs: { role: "alert" } },
+          el("p", { class: "lede" }, t("rules.loadFailed")),
+          el("p", {}, errorText(loadError)),
+          detail ? el("p", { class: "mono detail" }, detail) : null,
+        ),
+      );
       return;
     }
     if (!data) {
-      append(body, el("p", { class: "muted" }, "Loading…"));
+      append(body, el("p", { class: "muted" }, t("common.loading")));
       return;
     }
     if (form) {
@@ -69,8 +79,8 @@ export function mountRulesView(root: HTMLElement): void {
       el(
         "div",
         { class: "rules-head" },
-        el("p", { class: "muted intro" }, "A rule gives the repos in a folder, or the repos on a server, their own name and email."),
-        el("button", { type: "button", class: "primary", on: { click: () => openForm(null) } }, "Add a rule"),
+        el("p", { class: "muted intro" }, t("rules.intro")),
+        el("button", { type: "button", class: "primary", on: { click: () => openForm(null) } }, t("rules.add")),
       ),
     );
     if (saved) append(panel, savedBanner(saved));
@@ -81,8 +91,8 @@ export function mountRulesView(root: HTMLElement): void {
         el(
           "div",
           { class: "empty" },
-          el("p", { class: "lede" }, "No rules yet."),
-          el("p", { class: "muted" }, "For example: everything under ~/work commits with your work email, and every repo on your Gitea server with your Gitea account."),
+          el("p", { class: "lede" }, t("rules.empty.lede")),
+          el("p", { class: "muted" }, tx("rules.empty.body", { folder: el("code", {}, "~/work") })),
         ),
       );
       return panel;
@@ -99,19 +109,19 @@ export function mountRulesView(root: HTMLElement): void {
       "div",
       // Saving worked either way; folders it doesn't cover are a note, not a failure.
       { class: `verdict ${misses.length ? "note" : "ok"}`, attrs: { role: "status" } },
-      el("p", { class: "lede" }, `Saved the rule “${s.rule.id}”.`),
+      el("p", { class: "lede" }, t("rules.saved", { id: s.rule.id })),
     );
     if (s.checks.length) {
       const ul = el("ul", { class: "check-list" });
       for (const c of s.checks) {
-        append(ul, el("li", { class: c.applies ? "ok-text" : "problem-text" }, c.applies ? "Applies in " : "Doesn't apply in ", el("span", { class: "mono" }, tilde(c.path))));
+        append(ul, el("li", { class: c.applies ? "ok-text" : "problem-text" }, appliesText(c.applies, c.path)));
       }
       append(box, ul);
       if (misses.length) {
-        append(box, el("p", { class: "muted" }, "Open those folders in Identity to see what they use instead."));
+        append(box, el("p", { class: "muted" }, t("rules.saved.misses")));
       }
     } else {
-      append(box, el("p", { class: "muted" }, "Use “Check a folder” below to see it working in a repository."));
+      append(box, el("p", { class: "muted" }, t("rules.saved.tryCheck")));
     }
     return box;
   }
@@ -124,14 +134,12 @@ export function mountRulesView(root: HTMLElement): void {
           ? `<${r.email}>`
           : r.name
             ? r.name
-            : r.fileExists
-              ? "Sets no name or email"
-              : "Its identity file is missing";
-    const whoNote = r.name && !r.email ? " (name only)" : !r.name && r.email ? " (email only)" : "";
+            : t(r.fileExists ? "rules.who.none" : "rules.who.fileMissing");
+    const whoNote = r.name && !r.email ? t("rules.who.nameOnly") : !r.name && r.email ? t("rules.who.emailOnly") : "";
 
     const actions = el("div", { class: "rule-actions" });
     if (r.managed) {
-      append(actions, el("button", { type: "button", on: { click: () => openForm(r) } }, "Edit"));
+      append(actions, el("button", { type: "button", on: { click: () => openForm(r) } }, t("common.edit")));
     }
     append(
       actions,
@@ -147,7 +155,7 @@ export function mountRulesView(root: HTMLElement): void {
             },
           },
         },
-        "Remove",
+        t("common.remove"),
       ),
     );
 
@@ -165,7 +173,7 @@ export function mountRulesView(root: HTMLElement): void {
       el(
         "p",
         { class: "muted rule-file" },
-        r.managed ? "" : "Written by hand, so gitid can remove it but not edit it. ",
+        r.managed ? "" : `${t("rules.handWritten")} `,
         el("span", { class: "mono", title: r.file }, tilde(r.file)),
       ),
     );
@@ -176,13 +184,8 @@ export function mountRulesView(root: HTMLElement): void {
         el(
           "div",
           { class: "confirm", attrs: { role: "alert" } },
-          el(
-            "p",
-            {},
-            `Remove the rule “${r.id}”?`,
-            r.managed ? " Its identity file is deleted too." : " Its file stays where it is.",
-          ),
-          el("button", { type: "button", class: "danger", on: { click: () => void remove(r) } }, "Remove rule"),
+          el("p", {}, t(r.managed ? "rules.confirm.managed" : "rules.confirm.handWritten", { id: r.id })),
+          el("button", { type: "button", class: "danger", on: { click: () => void remove(r) } }, t("rules.confirm.remove")),
           el(
             "button",
             {
@@ -194,14 +197,14 @@ export function mountRulesView(root: HTMLElement): void {
                 },
               },
             },
-            "Cancel",
+            t("common.cancel"),
           ),
         ),
       );
     }
 
     const check = checks.get(r.id);
-    const checkButton = el("button", { type: "button", class: "link", on: { click: () => void checkFolder(r) } }, "Check a folder");
+    const checkButton = el("button", { type: "button", class: "link", on: { click: () => void checkFolder(r) } }, t("rules.check"));
     append(
       item,
       el(
@@ -212,12 +215,7 @@ export function mountRulesView(root: HTMLElement): void {
           ? null
           : typeof check === "string"
             ? el("span", { class: "problem-text" }, check)
-            : el(
-                "span",
-                { class: check.applies ? "ok-text" : "problem-text" },
-                check.applies ? "Applies in " : "Doesn't apply in ",
-                el("span", { class: "mono" }, tilde(check.path)),
-              ),
+            : el("span", { class: check.applies ? "ok-text" : "problem-text" }, appliesText(check.applies, check.path)),
       ),
     );
     return item;
@@ -264,11 +262,11 @@ export function mountRulesView(root: HTMLElement): void {
   }
 
   function formPanel(f: Form, d: RulesView): HTMLElement {
-    const field = (label: string, help: string, input: HTMLInputElement) =>
+    const field = (label: MessageKey, help: MessageKey, input: HTMLInputElement) =>
       el(
         "div",
         { class: "row" },
-        el("div", { class: "row-text" }, el("label", { attrs: { for: input.id } }, label), el("p", { class: "muted help" }, help)),
+        el("div", { class: "row-text" }, el("label", { attrs: { for: input.id } }, t(label)), el("p", { class: "muted help" }, t(help))),
         el("div", { class: "row-control" }, input),
       );
     const text = (id: string, value: string, placeholder: string, onInput: (v: string) => void, extra: Record<string, string> = {}) => {
@@ -284,14 +282,14 @@ export function mountRulesView(root: HTMLElement): void {
     const formEl = el("form", { class: "rule-form" });
     append(
       formEl,
-      el("h2", { class: "form-title" }, f.editing ? `Edit the rule “${f.editing.id}”` : "Add a rule"),
+      el("h2", { class: "form-title" }, f.editing ? t("rules.form.editTitle", { id: f.editing.id }) : t("rules.form.addTitle")),
       field(
-        "Rule name",
-        f.editing ? "Can't be changed. It is also the name of the rule's identity file." : "Letters, digits, - and _, like work or gitea. Also names the rule's identity file.",
+        "rules.form.id",
+        f.editing ? "rules.form.id.helpEditing" : "rules.form.id.help",
         text("rule-id", f.id, "work", (v) => (f.id = v), f.editing ? { readonly: "" } : {}),
       ),
-      field("Name", "Leave empty to keep your default name in these repos.", text("rule-name", f.name, "Your Name", (v) => (f.name = v))),
-      field("Email", "Leave empty to keep your default email in these repos.", text("rule-email", f.email, "you@company.example", (v) => (f.email = v))),
+      field("rules.form.name", "rules.form.name.help", text("rule-name", f.name, t("rules.form.name.placeholder"), (v) => (f.name = v))),
+      field("rules.form.email", "rules.form.email.help", text("rule-email", f.email, "you@company.example", (v) => (f.email = v))),
     );
 
     const conds = el("div", { class: "conditions" });
@@ -301,8 +299,8 @@ export function mountRulesView(root: HTMLElement): void {
       el(
         "section",
         { class: "group" },
-        el("h2", {}, "Applies to"),
-        el("p", { class: "muted group-note" }, "The rule applies to repos that match any of these."),
+        el("h2", {}, t("rules.form.appliesTo")),
+        el("p", { class: "muted group-note" }, t("rules.form.appliesTo.note")),
         conds,
         el(
           "button",
@@ -318,7 +316,7 @@ export function mountRulesView(root: HTMLElement): void {
               },
             },
           },
-          "Add another folder or server",
+          t("rules.form.addLine"),
         ),
       ),
     );
@@ -328,7 +326,7 @@ export function mountRulesView(root: HTMLElement): void {
       el(
         "div",
         { class: "form-actions" },
-        el("button", { type: "submit", class: "primary", attrs: f.saving ? { disabled: "" } : {} }, f.saving ? "Saving…" : "Save rule"),
+        el("button", { type: "submit", class: "primary", attrs: f.saving ? { disabled: "" } : {} }, t(f.saving ? "rules.form.saving" : "rules.form.save")),
         el(
           "button",
           {
@@ -340,7 +338,7 @@ export function mountRulesView(root: HTMLElement): void {
               },
             },
           },
-          "Cancel",
+          t("common.cancel"),
         ),
         f.error ? el("p", { class: "status bad", attrs: { role: "alert" } }, f.error) : null,
       ),
@@ -362,7 +360,7 @@ export function mountRulesView(root: HTMLElement): void {
             {
               type: "button",
               class: "link",
-              attrs: { "aria-label": `Remove line ${i + 1}` },
+              attrs: { "aria-label": t("rules.line.remove", { n: formatNumber(i + 1) }) },
               on: {
                 click: () => {
                   f.when.splice(i, 1);
@@ -370,21 +368,22 @@ export function mountRulesView(root: HTMLElement): void {
                 },
               },
             },
-            "Remove",
+            t("common.remove"),
           )
         : null;
 
     if (w.kind === "raw") {
-      append(row, el("p", { class: "raw" }, "Kept as written: ", el("code", {}, w.raw)), removeButton);
+      append(row, el("p", { class: "raw" }, tx("rules.line.raw", { condition: el("code", {}, w.raw) })), removeButton);
       return row;
     }
 
+    const n = formatNumber(i + 1);
     const kinds: [When["kind"], string][] = [
-      ["folder", "Repos in a folder"],
-      ["remoteHost", "Repos on a server"],
-      ["remotePattern", "Remote URL pattern"],
+      ["folder", t("rules.line.kind.folder")],
+      ["remoteHost", t("rules.line.kind.remoteHost")],
+      ["remotePattern", t("rules.line.kind.remotePattern")],
     ];
-    const select = el("select", { attrs: { "aria-label": `Line ${i + 1}: kind` } });
+    const select = el("select", { attrs: { "aria-label": t("rules.line.kindLabel", { n }) } });
     for (const [k, label] of kinds) {
       const disabled = k !== "folder" && !serversOk;
       append(
@@ -392,7 +391,7 @@ export function mountRulesView(root: HTMLElement): void {
         el(
           "option",
           { attrs: { value: k, ...(k === w.kind ? { selected: "" } : {}), ...(disabled ? { disabled: "" } : {}) } },
-          disabled ? `${label} (needs git 2.36)` : label,
+          disabled ? t("rules.line.kind.needsGit", { kind: label }) : label,
         ),
       );
     }
@@ -420,7 +419,7 @@ export function mountRulesView(root: HTMLElement): void {
 
     append(row, select);
     if (w.kind === "folder") {
-      const inp = input(w.path, "~/work", `Line ${i + 1}: folder`, (v) => (w.path = v));
+      const inp = input(w.path, "~/work", t("rules.line.folderLabel", { n }), (v) => (w.path = v));
       const browse = el(
         "button",
         {
@@ -435,22 +434,22 @@ export function mountRulesView(root: HTMLElement): void {
             },
           },
         },
-        "Browse",
+        t("common.browse"),
       );
       append(row, inp, browse);
     } else if (w.kind === "remoteHost") {
-      const port = input(w.sshPort === null ? "" : String(w.sshPort), "22", `Line ${i + 1}: SSH port`, (v) => {
+      const port = input(w.sshPort === null ? "" : String(w.sshPort), "22", t("rules.line.portLabel", { n }), (v) => {
         const n = Number(v);
         w.sshPort = v === "" || !Number.isInteger(n) ? null : n;
       });
       port.classList.add("port");
       append(
         row,
-        input(w.host, "gitea.example.com", `Line ${i + 1}: server`, (v) => (w.host = v)),
-        el("label", { class: "muted port-label" }, "SSH port", port),
+        input(w.host, "gitea.example.com", t("rules.line.serverLabel", { n }), (v) => (w.host = v)),
+        el("label", { class: "muted port-label" }, t("rules.line.sshPort"), port),
       );
     } else {
-      append(row, input(w.pattern, "https://example.com/team/**", `Line ${i + 1}: remote URL pattern`, (v) => (w.pattern = v)));
+      append(row, input(w.pattern, "https://example.com/team/**", t("rules.line.patternLabel", { n }), (v) => (w.pattern = v)));
     }
     append(row, removeButton);
     return row;
@@ -461,7 +460,7 @@ export function mountRulesView(root: HTMLElement): void {
       w.kind === "folder" ? w.path !== "" : w.kind === "remoteHost" ? w.host !== "" : w.kind === "remotePattern" ? w.pattern !== "" : true,
     );
     if (when.length === 0) {
-      f.error = "Add at least one folder or server.";
+      f.error = t("rules.form.needsWhere");
       render();
       return;
     }
@@ -491,4 +490,9 @@ export function mountRulesView(root: HTMLElement): void {
 
 function message(e: unknown): string {
   return errorText(e);
+}
+
+/** "Applies in ~/code/blog" or "Doesn't apply in ...", with the path in code style. */
+function appliesText(applies: boolean, path: string): DocumentFragment {
+  return tx(applies ? "rules.appliesIn" : "rules.notAppliesIn", { path: el("span", { class: "mono" }, tilde(path)) });
 }

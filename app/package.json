@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "typecheck": "tsc",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "check:strings": "node scripts/find-literals.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2"
