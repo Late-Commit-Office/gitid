@@ -18,6 +18,8 @@ npm run tauri build          # installable bundle in target/release/bundle/
 npm run tauri build -- --features devtools   # the same, with the web inspector
 ```
 
+`tauri dev` and `tauri build` first build the CLI into `src-tauri/binaries/` (`npm run sidecar`, see `scripts/build-sidecar.mjs`) so the installers can ship it. Run `npm run sidecar` yourself before `cargo clippy -p gitid-app` or `cargo test -p gitid-app`: the app's build script stops while that file is missing.
+
 DevTools (right-click > Inspect Element) are always on in `tauri dev`. Release builds leave them out unless built with `--features devtools`, which CI's test builds use; releases must not, because on macOS it relies on private APIs.
 
 - **Identity:** pick a folder to see who commits there will be from, which file (or rule, or environment variable) each value comes from, and a button to fix each problem.
@@ -26,10 +28,19 @@ DevTools (right-click > Inspect Element) are always on in `tauri dev`. Release b
 - **All config:** every key visible from a folder, each value it has in system, global and repository config (and files those include), and which one git uses. Values can be edited, removed and added. Secrets such as tokens in URLs are masked before they reach the app's window, so masked values can be removed but not edited.
 - **Settings:** your default name and email, "never guess my identity" (`user.useConfigOnly`), default branch, pull behavior, editor, commit signing, and which git the app uses. Changes go to your global git config; the app's own choice of git is saved separately in its config folder.
 
-## Try it
+## The command line
+
+The installers include the `gitid` command, so it works in a terminal without a separate download:
+
+- **Linux (.deb):** installed to `/usr/bin/gitid` with the app.
+- **Windows:** the installer adds its folder to your PATH (and the uninstaller removes it). Open a new terminal afterwards.
+- **macOS:** apps are dragged to Applications with no install step, so open gitid and choose **Settings > Command line > Install the gitid command**. It links `/usr/local/bin/gitid` to the copy inside the app, after macOS asks for your password (like VS Code's "Install 'code' command in PATH").
+- **Linux AppImage:** an AppImage can't install commands; use the .deb, or the command-line build from the same release.
+
+Settings > Command line shows whether a terminal will find it. On a machine without a desktop (a server), use the command-line build on its own, or build it:
 
 ```sh
-cargo install --path crates/cli         # puts `gitid` on your PATH
+cargo install --path crates/cli         # puts `gitid` in ~/.cargo/bin
 
 gitid whoami                            # who will commits here be from, and why?
 gitid whoami ~/code/app
@@ -84,14 +95,17 @@ crates/cli     gitid binary (clap)
 app/           desktop app frontend: plain TypeScript, built with Vite
   src/lib/     api.ts (typed calls to Rust), types.ts (the JSON shapes), i18n.ts (t(), plurals, language choice), messages.ts (words for errors, warnings, rules, settings), dom.ts, paths.ts, recent.ts
   src/locales/ en.json (source and fallback), zh-Hans.json; sources/ records the English each translation was made from
-  scripts/     find-literals.mjs (check:strings), check-locales.mjs (check:locales)
+  scripts/     find-literals.mjs (check:strings), check-locales.mjs (check:locales), build-sidecar.mjs (builds the CLI the installers ship)
   src/views/   identity.ts, scan.ts, rules.ts, scopes.ts (All config), settings.ts
-app/src-tauri/ desktop app backend: commands.rs, rule_commands.rs, scope_commands.rs, scan_commands.rs (the only calls the UI can make), state.rs (which git and the language; saved settings.json), error.rs (errors as a code + values; the frontend words them)
+app/src-tauri/ desktop app backend: commands.rs, rule_commands.rs, scope_commands.rs, scan_commands.rs, cli_commands.rs (the only calls the UI can make), state.rs (which git and the language; saved settings.json), error.rs (errors as a code + values; the frontend words them)
+  windows/     installer-hooks.nsh (adds the install folder to the user's PATH, and removes it on uninstall)
 ```
 
 The backend never sends the app a sentence to show: errors, warnings, rule descriptions and setting labels arrive as codes and values, and the frontend words them in the user's language (`src/locales/`). Text from git itself (why it refused, a failed command's error) is shown as it is, under gitid's own sentence. The CLI and its `--json` output stay in English.
 
 The app's webview gets no plugin permissions: it can only call gitid's own commands, and even the folder picker is opened from Rust. Text from config is only ever inserted as text, never as HTML.
+
+Apart from git, the app runs one program: `osascript` on macOS, when you install or remove the `gitid` command in Settings, so macOS can ask for your password.
 
 The rule: every read and write goes through the `git` executable. Config files are never parsed or written directly. (gitid only creates the identities folder, and deletes identity files it created itself.)
 

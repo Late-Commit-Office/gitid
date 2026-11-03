@@ -106,6 +106,10 @@ jobs:
       - run: npm run check:locales
       # Builds app/dist, which the Rust side embeds; clippy needs it to exist.
       - run: npm run build
+      # The gitid CLI the installers ship (bundle > externalBin). The app's
+      # build script needs it to exist too. `tauri build` below runs this
+      # again (as beforeBuildCommand); by then it's cached.
+      - run: npm run sidecar
       - run: cargo clippy -p gitid-app --all-targets -- -D warnings
       # The app's own tests (the JSON the rule form sends and receives).
       - run: cargo test -p gitid-app

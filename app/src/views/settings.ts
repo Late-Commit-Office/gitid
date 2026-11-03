@@ -17,7 +17,7 @@ import {
 } from "../lib/i18n";
 import { choiceLabel, errorDetail, errorText, settingHelp, settingLabel, settingPlaceholder } from "../lib/messages";
 import { tilde } from "../lib/paths";
-import type { CommandError, SettingGroup, SettingValue, SettingsView } from "../lib/types";
+import type { CliStatus, CommandError, SettingGroup, SettingValue, SettingsView } from "../lib/types";
 
 const GROUPS: { id: SettingGroup; heading: MessageKey; note?: MessageKey }[] = [
   { id: "identity", heading: "settings.group.identity", note: "settings.group.identity.note" },
@@ -45,12 +45,23 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
   append(root, body);
 
   let view: SettingsView | null = null;
+  /** Whether the gitid command is installed; loaded on its own so it never holds up the rest. */
+  let cli: CliStatus | null = null;
   let status: Status | null = null;
   let busy = false;
   /** Text typed but not saved yet, kept across re-renders (e.g. after a refused save). */
   const drafts = new Map<string, string>();
 
   async function load(): Promise<void> {
+    void api
+      .cliStatus()
+      .then((c) => {
+        cli = c;
+        render();
+      })
+      .catch(() => {
+        // Not knowing just leaves the section out.
+      });
     try {
       view = await api.settings();
     } catch (e) {
@@ -102,7 +113,7 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
         );
       }
     }
-    append(body, gitSection(view), languageSection());
+    append(body, gitSection(view), cli ? cliSection(cli) : null, languageSection());
   }
 
   function rowStatus(key: string): HTMLElement {
@@ -189,6 +200,81 @@ export function mountSettingsView(root: HTMLElement, options: SettingsOptions): 
       { class: `row row-${s.kind.kind}` },
       el("div", { class: "row-text" }, label, el("p", { class: "muted help" }, settingHelp(s.key))),
       el("div", { class: "row-control" }, control, rowStatus(s.key)),
+    );
+  }
+
+  /** Install or remove the command; a cancelled password prompt changes nothing and says nothing. */
+  async function cliChange(action: () => Promise<CliStatus>, done: MessageKey): Promise<void> {
+    if (busy) return;
+    busy = true;
+    const before = cli?.state;
+    try {
+      cli = await action();
+      status = cli.state !== before ? { key: "cli", ok: true, text: t(done) } : null;
+    } catch (e) {
+      status = { key: "cli", ok: false, text: message(e) };
+    } finally {
+      busy = false;
+    }
+    render();
+    body.querySelector<HTMLElement>(`[data-key="cli"]`)?.focus();
+  }
+
+  function cliSection(c: CliStatus): HTMLElement {
+    const path = (p: string | null) => el("code", {}, tilde(p ?? ""));
+    const button = (label: MessageKey, onClick: () => void) =>
+      el("button", { type: "button", attrs: { "data-key": "cli" }, on: { click: onClick } }, t(label));
+    const install = (replace: boolean) => () =>
+      void cliChange(() => api.installCli(replace, t("settings.cli.installPrompt")), "settings.cli.installed");
+
+    let summary: Node | string;
+    let action: HTMLElement | null = null;
+    switch (c.state) {
+      case "ready":
+        summary = tx("settings.cli.ready", { path: path(c.command) });
+        if (c.canLink) {
+          action = button("settings.cli.remove", () => {
+            void cliChange(() => api.removeCli(t("settings.cli.removePrompt")), "common.removed");
+          });
+        }
+        break;
+      case "canLink":
+        summary = tx("settings.cli.canLink", { dir: path(c.linkDir) });
+        action = button("settings.cli.install", install(false));
+        break;
+      case "taken":
+        summary = tx("settings.cli.taken", { path: path(c.command) });
+        if (c.canLink) action = button("settings.cli.replace", install(true));
+        break;
+      case "moveFirst":
+        summary = t("settings.cli.moveFirst");
+        break;
+      case "notOnPath":
+        summary = tx("settings.cli.notOnPath", { path: path(c.bundled) });
+        break;
+      case "appImage":
+        summary = t("settings.cli.appImage");
+        break;
+      case "missing":
+        summary = t("settings.cli.missing");
+        break;
+    }
+
+    return el(
+      "section",
+      { class: "group" },
+      el("h2", {}, t("settings.cli.title")),
+      el("p", { class: "git-summary" }, summary),
+      el(
+        "div",
+        { class: "row row-text-wide" },
+        el(
+          "div",
+          { class: "row-text" },
+          el("p", { class: "muted help" }, tx("settings.cli.help", { command: el("code", {}, "gitid --help") })),
+        ),
+        el("div", { class: "row-control" }, action, rowStatus("cli")),
+      ),
     );
   }
 

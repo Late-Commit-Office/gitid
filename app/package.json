@@ -9,6 +9,7 @@
     "typecheck": "tsc",
     "preview": "vite preview",
     "tauri": "tauri",
+    "sidecar": "node scripts/build-sidecar.mjs",
     "check:strings": "node scripts/find-literals.mjs",
     "check:locales": "node scripts/check-locales.mjs"
   },

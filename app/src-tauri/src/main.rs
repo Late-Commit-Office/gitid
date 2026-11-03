@@ -7,6 +7,7 @@
 //! commands registered below, and each of those goes through the core, which
 //! goes through git.
 
+mod cli_commands;
 mod commands;
 mod error;
 mod rule_commands;
@@ -39,6 +40,9 @@ fn main() {
             commands::pick_git_executable,
             commands::get_language,
             commands::set_language,
+            cli_commands::cli_status,
+            cli_commands::install_cli,
+            cli_commands::remove_cli,
             rule_commands::list_rules,
             rule_commands::save_rule,
             rule_commands::remove_rule,

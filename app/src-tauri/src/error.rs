@@ -42,7 +42,7 @@ impl CommandError {
         }
     }
 
-    fn with_detail(mut self, detail: impl Into<String>) -> Self {
+    pub(crate) fn with_detail(mut self, detail: impl Into<String>) -> Self {
         let detail = detail.into();
         self.detail = (!detail.is_empty()).then_some(detail);
         self
@@ -51,6 +51,11 @@ impl CommandError {
     /// Something the user picked or typed that the app itself refuses.
     pub fn invalid(code: &str, params: Value, message: String) -> Self {
         CommandError::new("invalid", code, params, message)
+    }
+
+    /// Installing or removing the `gitid` command (see cli_commands.rs).
+    pub fn cli(code: &str, params: Value, message: String) -> Self {
+        CommandError::new("cli", code, params, message)
     }
 
     /// The app's own settings file couldn't be written.
@@ -288,6 +293,10 @@ mod tests {
         // The app's own.
         out.push(CommandError::save_settings(io()));
         out.push(CommandError::internal("x"));
+        for code in ["cliMissing", "cliCantLink", "cliMoveFirst", "cliLinkFailed"] {
+            out.push(CommandError::cli(code, json!({ "dir": "/x" }), s()));
+        }
+        out.push(CommandError::cli("cliTaken", json!({ "path": "/x" }), s()));
         out.push(CommandError::invalid(
             "badLanguageTag",
             json!({ "tag": "x" }),

@@ -3,6 +3,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   AddTo,
+  CliStatus,
   CommandError,
   ErrorParam,
   GitInfo,
@@ -64,6 +65,11 @@ export const api = {
   /** The language chosen in Settings; null follows the system. */
   language: () => call<string | null>("get_language"),
   setLanguage: (language: string | null) => call<void>("set_language", { language }),
+  /** Whether the gitid command is installed, and where. */
+  cliStatus: () => call<CliStatus>("cli_status"),
+  /** macOS: link the command (asks for a password). `prompt` is shown above the password field. */
+  installCli: (replace: boolean, prompt: string) => call<CliStatus>("install_cli", { replace, prompt }),
+  removeCli: (prompt: string) => call<CliStatus>("remove_cli", { prompt }),
 
   rules: () => call<RulesView>("list_rules"),
   saveRule: (input: RuleInput) => call<SaveRuleResult>("save_rule", { input }),

@@ -137,6 +137,21 @@ export interface GitLocation {
   error: CommandError | null;
 }
 
+/** Whether the `gitid` command is installed (app/src-tauri/src/cli_commands.rs). */
+export type CliState = "ready" | "canLink" | "taken" | "moveFirst" | "notOnPath" | "appImage" | "missing";
+
+export interface CliStatus {
+  state: CliState;
+  /** The CLI that comes with the app. */
+  bundled: string | null;
+  /** ready: the gitid a terminal finds. taken: the other one. canLink: where the link goes. */
+  command: string | null;
+  /** Whether the app installs the command itself (macOS). */
+  canLink: boolean;
+  /** The folder the macOS app links into. */
+  linkDir: string;
+}
+
 export interface SettingsView {
   git: GitLocation;
   globalFile: string | null;
