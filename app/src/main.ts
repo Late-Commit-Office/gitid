@@ -46,6 +46,16 @@ async function loadLanguage(): Promise<LanguageChoice> {
 }
 
 async function start(root: HTMLElement): Promise<void> {
+  // Opened in an ordinary browser (say, the http://localhost:1420 that
+  // `tauri dev` prints while Rust is still compiling), there's no backend:
+  // every call would fail. Say where the app really is instead.
+  if (!("__TAURI_INTERNALS__" in window)) {
+    setLocale(resolveLocale("system"));
+    document.title = t("app.title");
+    append(root, notInApp());
+    return;
+  }
+
   let language = await loadLanguage();
   setLocale(resolveLocale(language));
 
@@ -152,5 +162,19 @@ function noGit(openSettings: () => void): HTMLElement {
     el("p", { class: "lede" }, t("noGit.lede")),
     el("p", {}, tx("noGit.body", { command: el("code", {}, "xcode-select --install") })),
     el("p", {}, el("button", { type: "button", class: "primary", on: { click: openSettings } }, t("noGit.choose"))),
+  );
+}
+
+/** Shown when the page is opened outside the gitid window. */
+function notInApp(): HTMLElement {
+  return el(
+    "div",
+    { class: "content" },
+    el(
+      "div",
+      { class: "verdict problem", attrs: { role: "alert" } },
+      el("p", { class: "lede" }, t("browser.lede")),
+      el("p", {}, tx("browser.body", { command: el("code", {}, "npm run tauri dev") })),
+    ),
   );
 }

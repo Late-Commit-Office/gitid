@@ -305,5 +305,7 @@
   "error.cliCantLink": "在此系统上，gitid 命令由安装程序添加，而不是由应用添加。",
   "error.cliMoveFirst": "请将 gitid 移到“应用程序”文件夹并从那里打开它，然后再安装命令。",
   "error.cliTaken": "{path} 是另一个程序，gitid 没有改动它。",
-  "error.cliLinkFailed": "无法将 gitid 命令添加到 {dir}。"
+  "error.cliLinkFailed": "无法将 gitid 命令添加到 {dir}。",
+  "browser.lede": "此页面只能在 gitid 窗口中使用。",
+  "browser.body": "这里只有 gitid 的界面，没有背后的应用，所以无法访问 git。如果您运行了 {command}，Rust 编译完成后 gitid 窗口会自动打开，第一次需要几分钟。您可以关闭此标签页。"
 }

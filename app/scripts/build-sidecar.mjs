@@ -16,7 +16,15 @@ import { fileURLToPath } from "node:url";
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = resolve(app, "..");
 
-const rustc = execFileSync("rustc", ["-vV"], { encoding: "utf8" });
+let rustc;
+try {
+  rustc = execFileSync("rustc", ["-vV"], { encoding: "utf8" });
+} catch {
+  console.error(
+    "build-sidecar: can't run `rustc`. Install Rust from https://rustup.rs, then open a new terminal so it's on your PATH.",
+  );
+  process.exit(1);
+}
 const host = /^host: (\S+)$/m.exec(rustc)?.[1];
 if (!host) throw new Error("couldn't read the host target from `rustc -vV`");
 

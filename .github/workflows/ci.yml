@@ -43,16 +43,16 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist
-          tar -czf "dist/gitid-${{ matrix.name }}.tar.gz" -C target/release gitid
+          tar -czf "dist/gitid-cli-${{ matrix.name }}.tar.gz" -C target/release gitid
       - name: Package CLI (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path target/release/gitid.exe -DestinationPath "dist/gitid-${{ matrix.name }}.zip"
+          Compress-Archive -Path target/release/gitid.exe -DestinationPath "dist/gitid-cli-${{ matrix.name }}.zip"
       - uses: actions/upload-artifact@v7
         with:
-          path: dist/gitid-${{ matrix.name }}.*
+          path: dist/gitid-cli-${{ matrix.name }}.*
           archive: false
           retention-days: 14
           if-no-files-found: error
@@ -124,23 +124,23 @@ jobs:
         working-directory: target/release/bundle
         run: |
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          tar -czf "$GITHUB_WORKSPACE/dist/gitid-app-${{ matrix.name }}.tar.gz" deb/*.deb appimage/*.AppImage
+          tar -czf "$GITHUB_WORKSPACE/dist/gitid-gui-cli-${{ matrix.name }}.tar.gz" deb/*.deb appimage/*.AppImage
       - name: Package app (macOS)
         if: runner.os == 'macOS'
         working-directory: target/release/bundle/macos
         run: |
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          tar -czf "$GITHUB_WORKSPACE/dist/gitid-app-${{ matrix.name }}.tar.gz" gitid.app
+          tar -czf "$GITHUB_WORKSPACE/dist/gitid-gui-cli-${{ matrix.name }}.tar.gz" gitid.app
       - name: Package app (Windows)
         if: runner.os == 'Windows'
         working-directory: target/release/bundle/nsis
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force "$env:GITHUB_WORKSPACE/dist" | Out-Null
-          Compress-Archive -Path *.exe -DestinationPath "$env:GITHUB_WORKSPACE/dist/gitid-app-${{ matrix.name }}.zip"
+          Compress-Archive -Path *.exe -DestinationPath "$env:GITHUB_WORKSPACE/dist/gitid-gui-cli-${{ matrix.name }}.zip"
       - uses: actions/upload-artifact@v7
         with:
-          path: dist/gitid-app-${{ matrix.name }}.*
+          path: dist/gitid-gui-cli-${{ matrix.name }}.*
           archive: false
           retention-days: 14
           if-no-files-found: error

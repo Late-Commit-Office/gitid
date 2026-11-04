@@ -309,5 +309,7 @@
   "error.cliCantLink": "On this system the installer adds the gitid command, not the app.",
   "error.cliMoveFirst": "Move gitid to your Applications folder and open it from there, then install the command.",
   "error.cliTaken": "{path} is a different program, so gitid left it as it is.",
-  "error.cliLinkFailed": "Couldn't add the gitid command to {dir}."
+  "error.cliLinkFailed": "Couldn't add the gitid command to {dir}.",
+  "browser.lede": "This page only works inside the gitid window.",
+  "browser.body": "It's gitid's screens without the app behind them, so nothing here can reach git. If you ran {command}, the gitid window opens by itself once Rust has finished compiling, which takes several minutes the first time. You can close this tab."
 }
