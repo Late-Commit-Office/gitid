@@ -157,12 +157,9 @@ export function mountScopesView(root: HTMLElement): void {
     return el(
       "div",
       { class: "key-block" },
-      el(
-        "h3",
-        { class: "mono key-name" },
-        k.key,
-        k.multiValued ? el("span", { class: "muted key-note" }, t("scopes.multiValued")) : null,
-      ),
+      el("h3", { class: "mono key-name" }, k.key),
+      // On its own line, so it stays easy to see under a long key.
+      k.multiValued ? el("p", { class: "muted key-note" }, t("scopes.multiValued")) : null,
       el("ul", { class: "values" }, ...k.values.map((x) => valueRow(k, x))),
     );
   }

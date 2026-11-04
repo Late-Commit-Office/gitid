@@ -832,10 +832,8 @@ button.danger {
 }
 
 .key-note {
-  font-family: var(--ui);
-  font-weight: 400;
   font-size: 0.8rem;
-  margin-left: 0.6rem;
+  margin: -0.15rem 0 0.35rem;
 }
 
 .values {
