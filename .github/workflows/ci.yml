@@ -13,8 +13,10 @@ jobs:
         include:
           - os: ubuntu-latest
             name: linux-x64
+          # Universal: one file for Apple silicon and Intel Macs.
           - os: macos-latest
-            name: macos-arm64
+            name: macos-universal
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
           - os: windows-latest
             name: windows-x64
     runs-on: ${{ matrix.os }}
@@ -24,6 +26,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+          targets: ${{ matrix.targets }}
       - uses: Swatinem/rust-cache@v2
       - run: git --version
       - run: cargo fmt --all --check
@@ -36,7 +39,17 @@ jobs:
 
       # ---- Test builds: downloadable from the run's summary page, not a release.
       - name: Build CLI
+        if: runner.os != 'macOS'
         run: cargo build --release -p gitid
+      # Both Mac architectures, joined into one universal file at the usual place.
+      - name: Build CLI (macOS, universal)
+        if: runner.os == 'macOS'
+        run: |
+          cargo build --release -p gitid --target aarch64-apple-darwin --target x86_64-apple-darwin
+          mkdir -p target/release
+          lipo -create -output target/release/gitid \
+            target/aarch64-apple-darwin/release/gitid target/x86_64-apple-darwin/release/gitid
+          lipo target/release/gitid -verify_arch arm64 x86_64 && lipo -info target/release/gitid
       # Artifacts don't keep the Unix executable bit, so pack into a tar.gz
       # (Linux/macOS) or zip (Windows) first and upload that file as-is.
       - name: Package CLI (Linux/macOS)
@@ -69,9 +82,13 @@ jobs:
           - os: ubuntu-22.04
             name: linux-x64
             bundles: deb,appimage
+          # Universal (Apple silicon and Intel). The bundled CLI is made
+          # universal too, by scripts/build-sidecar.mjs.
           - os: macos-latest
-            name: macos-arm64
+            name: macos-universal
             bundles: app
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+            args: --target universal-apple-darwin
           - os: windows-latest
             name: windows-x64
             bundles: nsis
@@ -84,6 +101,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+          targets: ${{ matrix.targets }}
       - uses: Swatinem/rust-cache@v2
       - name: Install Linux build dependencies (from Tauri's prerequisites)
         if: runner.os == 'Linux'
@@ -116,7 +134,7 @@ jobs:
       # Test builds get the web inspector (right-click > Inspect Element);
       # a release workflow must build without --features devtools.
       - name: Build app
-        run: npm run tauri build -- --ci --bundles ${{ matrix.bundles }} --features devtools
+        run: npm run tauri build -- --ci --bundles ${{ matrix.bundles }} ${{ matrix.args }} --features devtools
 
       # Bundles land in the workspace's target/ folder (repo root).
       - name: Package app (Linux)
@@ -127,9 +145,14 @@ jobs:
           tar -czf "$GITHUB_WORKSPACE/dist/gitid-gui-cli-${{ matrix.name }}.tar.gz" deb/*.deb appimage/*.AppImage
       - name: Package app (macOS)
         if: runner.os == 'macOS'
-        working-directory: target/release/bundle/macos
+        # A universal build lands under its target's folder.
+        working-directory: target/universal-apple-darwin/release/bundle/macos
         run: |
           mkdir -p "$GITHUB_WORKSPACE/dist"
+          # Fail if either the app or its CLI is missing an architecture.
+          for f in gitid.app/Contents/MacOS/gitid-app gitid.app/Contents/MacOS/gitid; do
+            lipo "$f" -verify_arch arm64 x86_64 && lipo -info "$f"
+          done
           tar -czf "$GITHUB_WORKSPACE/dist/gitid-gui-cli-${{ matrix.name }}.tar.gz" gitid.app
       - name: Package app (Windows)
         if: runner.os == 'Windows'

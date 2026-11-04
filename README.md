@@ -12,12 +12,12 @@ Each download is named for what's in it:
 
 | File | What it is |
 | --- | --- |
-| `gitid-gui-cli-macos-arm64.tar.gz` | The app for Apple silicon Macs, with the `gitid` command inside |
+| `gitid-gui-cli-macos-universal.tar.gz` | The app for Macs, Apple silicon and Intel, with the `gitid` command inside |
 | `gitid-gui-cli-windows-x64.zip` | The app's installer for 64-bit Windows, with the `gitid` command |
 | `gitid-gui-cli-linux-x64.tar.gz` | The app for 64-bit Linux, as a `.deb` package and an AppImage, with the `gitid` command |
 | `gitid-cli-<platform>` | The `gitid` command alone, for machines without a desktop (a server) |
 
-Until the first release, these are under **Artifacts** on a CI run's summary page. There's no build for Intel Macs or Arm Linux yet; [build from source](#building-from-source) there.
+Until the first release, these are under **Artifacts** on a CI run's summary page. There's no build for Arm Linux or Windows on Arm yet; [build from source](#building-from-source) there.
 
 You'll also need [git](https://git-scm.com) itself. gitid finds it, or you can point it at one in Settings.
 
@@ -125,7 +125,14 @@ npm run tauri build                     # installers, in target/release/bundle/ 
 
 The first `tauri dev` or `tauri build` downloads and compiles a few hundred Rust crates, which takes several minutes (longer on Windows); later runs are much faster. For much of that time the last line on screen is Vite's `Local: http://localhost:1420/`. That's the address the app window loads its screens from, not the app: opened in a browser it can only say so, because there's no gitid behind it. Wait for the gitid window to open by itself. `npm run build` on its own builds only the frontend and isn't needed first.
 
-`npm run tauri build` makes the same installers CI does: `macos/gitid.app` on macOS, `nsis/gitid_<version>_x64-setup.exe` on Windows, and `deb/` plus `appimage/` on Linux. Other formats are opt-in, such as `npm run tauri build -- --bundles dmg` for a disk image (Tauri's script lays it out by driving Finder, so run it from a logged-in desktop session, not over SSH).
+`npm run tauri build` makes the same installer types CI does: `macos/gitid.app` on macOS, `nsis/gitid_<version>_x64-setup.exe` on Windows, and `deb/` plus `appimage/` on Linux. On a Mac it builds for that Mac's own architecture. CI's downloads are universal (Apple silicon and Intel in one app); to build one yourself:
+
+```sh
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+npm run tauri build -- --target universal-apple-darwin   # in target/universal-apple-darwin/release/bundle/macos/
+```
+
+The bundled `gitid` command is made universal too (`scripts/build-sidecar.mjs` builds both and joins them with `lipo`). Other formats are opt-in, such as `npm run tauri build -- --bundles dmg` for a disk image (Tauri's script lays it out by driving Finder, so run it from a logged-in desktop session, not over SSH).
 
 Both `tauri dev` and `tauri build` first build the `gitid` command into `app/src-tauri/binaries/` (`npm run sidecar`, see `scripts/build-sidecar.mjs`), so the app can ship it. If you run cargo on the app directly (`cargo clippy -p gitid-app`, `cargo test -p gitid-app`, or an editor's rust-analyzer), run `npm run sidecar` once first, or the build stops with "resource path `binaries/gitid-<target>` doesn't exist".
 

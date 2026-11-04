@@ -29,28 +29,40 @@ const host = /^host: (\S+)$/m.exec(rustc)?.[1];
 if (!host) throw new Error("couldn't read the host target from `rustc -vV`");
 
 const target = process.env.TAURI_ENV_TARGET_TRIPLE || host;
-if (target === "universal-apple-darwin") {
-  // Would need both Apple targets built and joined with `lipo`.
-  throw new Error("build-sidecar: universal macOS builds aren't supported yet; build per architecture");
-}
 const debug = process.env.TAURI_ENV_DEBUG === "true" || process.argv.includes("--debug");
 const profile = debug ? "debug" : "release";
-
-const args = ["build", "-p", "gitid"];
-if (!debug) args.push("--release");
-// Only name the target when cross-building: with --target, cargo builds into
-// target/<triple>/ and would compile everything a second time.
-if (target !== host) args.push("--target", target);
-
-console.log(`build-sidecar: cargo ${args.join(" ")}`);
-execFileSync("cargo", args, { cwd: root, stdio: "inherit" });
-
-const exe = target.includes("windows") ? ".exe" : "";
 const targetDir = process.env.CARGO_TARGET_DIR ? resolve(root, process.env.CARGO_TARGET_DIR) : join(root, "target");
-const built = join(targetDir, ...(target !== host ? [target] : []), profile, `gitid${exe}`);
-const out = join(app, "src-tauri", "binaries", `gitid-${target}${exe}`);
+const binaries = join(app, "src-tauri", "binaries");
+mkdirSync(binaries, { recursive: true });
 
-mkdirSync(dirname(out), { recursive: true });
-copyFileSync(built, out);
-if (!exe) chmodSync(out, 0o755);
-console.log(`build-sidecar: ${built} -> ${out}`);
+/** Build the CLI for one target and copy it to binaries/gitid-<triple>[.exe]. */
+function buildFor(triple) {
+  const args = ["build", "-p", "gitid"];
+  if (!debug) args.push("--release");
+  // Only name the target when cross-building: with --target, cargo builds into
+  // target/<triple>/ and would compile everything a second time.
+  if (triple !== host) args.push("--target", triple);
+
+  console.log(`build-sidecar: cargo ${args.join(" ")}`);
+  execFileSync("cargo", args, { cwd: root, stdio: "inherit" });
+
+  const exe = triple.includes("windows") ? ".exe" : "";
+  const built = join(targetDir, ...(triple !== host ? [triple] : []), profile, `gitid${exe}`);
+  const out = join(binaries, `gitid-${triple}${exe}`);
+  copyFileSync(built, out);
+  if (!exe) chmodSync(out, 0o755);
+  console.log(`build-sidecar: ${built} -> ${out}`);
+  return out;
+}
+
+if (target === "universal-apple-darwin") {
+  // `tauri build --target universal-apple-darwin` compiles the app once per
+  // architecture (each looks for its own gitid-<arch>), then joins them and
+  // ships gitid-universal-apple-darwin. So make all three.
+  const parts = ["aarch64-apple-darwin", "x86_64-apple-darwin"].map(buildFor);
+  const out = join(binaries, `gitid-${target}`);
+  execFileSync("lipo", ["-create", "-output", out, ...parts], { stdio: "inherit" });
+  console.log(`build-sidecar: lipo -> ${out}`);
+} else {
+  buildFor(target);
+}
