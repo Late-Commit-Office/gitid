@@ -38,6 +38,10 @@
     "active": true,
     "targets": ["deb", "appimage", "nsis", "app"],
     "category": "DeveloperTool",
+    "license": "AGPL-3.0-or-later",
+    "publisher": "The Late Commit Office",
+    "copyright": "Copyright © 2026 The Late Commit Office",
+    "homepage": "https://github.com/Late-Commit-Office/gitid",
     "shortDescription": "See which git identity applies to any folder, and why",
     "externalBin": ["binaries/gitid"],
     "icon": [

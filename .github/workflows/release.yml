@@ -1,0 +1,74 @@
+name: Release
+
+# Push a version tag to make a draft release:
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# The tag must match the version in Cargo.toml, app/package.json and
+# app/src-tauri/tauri.conf.json. The builds are CI's (ci.yml, without
+# DevTools); this collects them, with checksums and the notes in
+# .github/release-notes.md, into a draft release to check and publish by hand.
+#
+# The publish job asks for `contents: write` itself, so the repository's
+# default workflow permissions can stay read-only. If creating the release
+# still fails with "Resource not accessible by integration", the
+# organization's Settings > Actions > General is limiting it.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Tag matches the version everywhere
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          cargo=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          npm=$(node -p "require('./app/package.json').version")
+          tauri=$(node -p "require('./app/src-tauri/tauri.conf.json').version")
+          echo "tag $tag, Cargo.toml $cargo, package.json $npm, tauri.conf.json $tauri"
+          for v in "$cargo" "$npm" "$tauri"; do
+            if [ "$v" != "$tag" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME doesn't match every version (Cargo.toml $cargo, package.json $npm, tauri.conf.json $tauri)"
+              exit 1
+            fi
+          done
+
+  build:
+    needs: version
+    uses: ./.github/workflows/ci.yml
+    with:
+      release: true
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: |
+          ls -la
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft --verify-tag \
+            --title "gitid ${GITHUB_REF_NAME#v}" \
+            --notes-file .github/release-notes.md

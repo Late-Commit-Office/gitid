@@ -302,7 +302,7 @@
   "settings.cli.removePrompt": "gitid wants to remove the gitid command from /usr/local/bin.",
   "settings.cli.taken": "{path} is a different gitid, so terminals don't run the one that comes with this app.",
   "settings.cli.moveFirst": "To install the gitid command, first move gitid to your Applications folder and open it from there.",
-  "settings.cli.notOnPath": "The gitid command comes with the app, at {path}, but its folder isn't on your PATH, so terminals can't find it. Reinstalling the app adds it.",
+  "settings.cli.notOnPath": "The gitid command comes with the app, at {path}, but its folder isn't on your PATH, so terminals can't find it. Add that folder to your PATH to use it.",
   "settings.cli.appImage": "The AppImage can't add the gitid command to your system. Install the .deb package instead, or download the command-line build from the same release.",
   "settings.cli.missing": "This build of gitid doesn't include the gitid command.",
   "error.cliMissing": "This build of gitid doesn't include the gitid command.",

@@ -1,8 +1,17 @@
 name: CI
 
 on:
+  # Branches only: a pushed version tag runs release.yml, which runs this
+  # file with `release: true`.
   push:
+    branches: ["**"]
   pull_request:
+  workflow_call:
+    inputs:
+      release:
+        description: Build for a release (no DevTools)
+        type: boolean
+        default: false
 
 jobs:
   # Core + CLI: format, lint, test, and a downloadable CLI build per OS.
@@ -37,7 +46,8 @@ jobs:
       # gitid-core/serde turns on the JSON contract tests the frontend relies on.
       - run: cargo test --workspace --exclude gitid-app --features gitid-core/serde --no-fail-fast
 
-      # ---- Test builds: downloadable from the run's summary page, not a release.
+      # ---- Builds: downloadable from the run's summary page; release.yml
+      # collects them into a draft release.
       - name: Build CLI
         if: runner.os != 'macOS'
         run: cargo build --release -p gitid
@@ -56,13 +66,13 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist
-          tar -czf "dist/gitid-cli-${{ matrix.name }}.tar.gz" -C target/release gitid
+          tar -czf "dist/gitid-cli-${{ matrix.name }}.tar.gz" -C target/release gitid -C "$GITHUB_WORKSPACE" LICENSE
       - name: Package CLI (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path target/release/gitid.exe -DestinationPath "dist/gitid-cli-${{ matrix.name }}.zip"
+          Compress-Archive -Path target/release/gitid.exe, LICENSE -DestinationPath "dist/gitid-cli-${{ matrix.name }}.zip"
       - uses: actions/upload-artifact@v7
         with:
           path: dist/gitid-cli-${{ matrix.name }}.*
@@ -82,6 +92,9 @@ jobs:
           - os: ubuntu-22.04
             name: linux-x64
             bundles: deb,appimage
+            # The .deb and the AppImage are separate downloads.
+            upload1: gitid-gui-cli-linux-x64.deb
+            upload2: gitid-gui-cli-linux-x64.AppImage
           # Universal (Apple silicon and Intel). The bundled CLI is made
           # universal too, by scripts/build-sidecar.mjs.
           - os: macos-latest
@@ -89,9 +102,13 @@ jobs:
             bundles: app
             targets: aarch64-apple-darwin,x86_64-apple-darwin
             args: --target universal-apple-darwin
+            upload1: gitid-gui-cli-macos-universal.tar.gz
           - os: windows-latest
             name: windows-x64
             bundles: nsis
+            # The installer, and a portable zip of the same two programs.
+            upload1: gitid-gui-cli-windows-x64-setup.exe
+            upload2: gitid-gui-cli-windows-x64-portable.zip
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -131,10 +148,10 @@ jobs:
       - run: cargo clippy -p gitid-app --all-targets -- -D warnings
       # The app's own tests (the JSON the rule form sends and receives).
       - run: cargo test -p gitid-app
-      # Test builds get the web inspector (right-click > Inspect Element);
-      # a release workflow must build without --features devtools.
+      # Test builds get the web inspector (right-click > Inspect Element).
+      # Releases don't: on macOS it relies on private APIs.
       - name: Build app
-        run: npm run tauri build -- --ci --bundles ${{ matrix.bundles }} ${{ matrix.args }} --features devtools
+        run: npm run tauri build -- --ci --bundles ${{ matrix.bundles }} ${{ matrix.args }} ${{ !inputs.release && '--features devtools' || '' }}
 
       # Bundles land in the workspace's target/ folder (repo root).
       - name: Package app (Linux)
@@ -142,7 +159,8 @@ jobs:
         working-directory: target/release/bundle
         run: |
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          tar -czf "$GITHUB_WORKSPACE/dist/gitid-gui-cli-${{ matrix.name }}.tar.gz" deb/*.deb appimage/*.AppImage
+          cp deb/*.deb "$GITHUB_WORKSPACE/dist/${{ matrix.upload1 }}"
+          cp appimage/*.AppImage "$GITHUB_WORKSPACE/dist/${{ matrix.upload2 }}"
       - name: Package app (macOS)
         if: runner.os == 'macOS'
         # A universal build lands under its target's folder.
@@ -157,17 +175,29 @@ jobs:
           for f in gitid.app/Contents/MacOS/gitid-app gitid.app/Contents/MacOS/gitid; do
             lipo "$f" -verify_arch arm64 x86_64 && lipo -info "$f"
           done
-          tar -czf "$GITHUB_WORKSPACE/dist/gitid-gui-cli-${{ matrix.name }}.tar.gz" gitid.app
+          tar -czf "$GITHUB_WORKSPACE/dist/${{ matrix.upload1 }}" gitid.app -C "$GITHUB_WORKSPACE" LICENSE
+      # Portable: the app and the CLI that `tauri build` left in
+      # target/release (the CLI as the bundled sidecar), with the license.
       - name: Package app (Windows)
         if: runner.os == 'Windows'
-        working-directory: target/release/bundle/nsis
+        working-directory: target/release
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force "$env:GITHUB_WORKSPACE/dist" | Out-Null
-          Compress-Archive -Path *.exe -DestinationPath "$env:GITHUB_WORKSPACE/dist/gitid-gui-cli-${{ matrix.name }}.zip"
+          $dist = "$env:GITHUB_WORKSPACE/dist"
+          New-Item -ItemType Directory -Force $dist | Out-Null
+          Copy-Item bundle/nsis/*-setup.exe "$dist/${{ matrix.upload1 }}"
+          Compress-Archive -Path gitid-app.exe, gitid.exe, "$env:GITHUB_WORKSPACE/LICENSE" -DestinationPath "$dist/${{ matrix.upload2 }}"
+      # One file per upload (archive: false takes a single file).
       - uses: actions/upload-artifact@v7
         with:
-          path: dist/gitid-gui-cli-${{ matrix.name }}.*
+          path: dist/${{ matrix.upload1 }}
+          archive: false
+          retention-days: 14
+          if-no-files-found: error
+      - if: matrix.upload2
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/${{ matrix.upload2 }}
           archive: false
           retention-days: 14
           if-no-files-found: error

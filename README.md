@@ -8,30 +8,40 @@ Status: **all v1 features are in.** The `gitid` CLI and the desktop app explain 
 
 ## Download and install
 
-Each download is named for what's in it:
+Download from the [Releases page](https://github.com/Late-Commit-Office/gitid/releases). Each file is named for what's in it:
 
 | File | What it is |
 | --- | --- |
 | `gitid-gui-cli-macos-universal.tar.gz` | The app for Macs, Apple silicon and Intel, with the `gitid` command inside |
-| `gitid-gui-cli-windows-x64.zip` | The app's installer for 64-bit Windows, with the `gitid` command |
-| `gitid-gui-cli-linux-x64.tar.gz` | The app for 64-bit Linux, as a `.deb` package and an AppImage, with the `gitid` command |
+| `gitid-gui-cli-windows-x64-setup.exe` | The app's installer for 64-bit Windows, with the `gitid` command |
+| `gitid-gui-cli-windows-x64-portable.zip` | The same app and command for Windows, without an installer |
+| `gitid-gui-cli-linux-x64.deb` | The app for Debian and Ubuntu, with the `gitid` command |
+| `gitid-gui-cli-linux-x64.AppImage` | The app for other Linux distributions, with the `gitid` command inside |
 | `gitid-cli-<platform>` | The `gitid` command alone, for machines without a desktop (a server) |
+| `SHA256SUMS.txt` | Each file's checksum, to check a download |
 
-Until the first release, these are under **Artifacts** on a CI run's summary page. There's no build for Arm Linux or Windows on Arm yet; [build from source](#building-from-source) there.
+There's no build for Arm Linux or Windows on Arm yet; [build from source](#building-from-source) there. Builds of the latest code, between releases, are under **Artifacts** on a CI run's summary page.
 
 You'll also need [git](https://git-scm.com) itself. gitid finds it, or you can point it at one in Settings.
 
 **macOS:** unpack the `.tar.gz` (double-click it) and drag `gitid.app` to Applications. The app is signed ad hoc but not notarized by Apple yet, so macOS blocks it the first time: open it once, then choose **Open Anyway** under **System Settings > Privacy & Security** (on macOS 14 and older, right-clicking it and choosing **Open** also works). If macOS still says the app is damaged, run `xattr -dr com.apple.quarantine /Applications/gitid.app` in Terminal (no `sudo` needed) and open it again.
 
-**Windows:** unzip the download and run `gitid_<version>_x64-setup.exe`. It installs for your user only and needs no administrator rights. The installer isn't signed yet, so SmartScreen may warn: choose **More info > Run anyway**.
+**Windows:** run `gitid-gui-cli-windows-x64-setup.exe`. It installs for your user only and needs no administrator rights. The installer isn't signed yet, so SmartScreen may warn: choose **More info > Run anyway**.
 
-**Linux:** unpack the `.tar.gz`. On Debian or Ubuntu (22.04 or newer), install the small `.deb`, which also installs the web engine the app needs:
+**Windows, portable:** unzip `gitid-gui-cli-windows-x64-portable.zip` into any folder and run `gitid-app.exe`; `gitid.exe` next to it is the command. Nothing is installed, so the command isn't on your PATH (add the folder yourself if you want it there), and gitid still keeps its few settings in your user's app-data folder. It needs Microsoft's WebView2, which Windows 10 and 11 already include.
+
+**Linux, Debian or Ubuntu (22.04 or newer):** install the small `.deb`, which also installs the web engine the app needs:
 
 ```sh
-sudo apt install ./deb/gitid_*_amd64.deb
+sudo apt install ./gitid-gui-cli-linux-x64.deb
 ```
 
-On other distributions, use the AppImage (it's 70–100 MB because it carries its own web engine): `chmod +x appimage/gitid_*.AppImage`, then run it.
+**Linux, other distributions:** use the AppImage. It's 70–100 MB because it carries its own web engine, and needs no installing:
+
+```sh
+chmod +x gitid-gui-cli-linux-x64.AppImage
+./gitid-gui-cli-linux-x64.AppImage
+```
 
 ### Using the app
 
@@ -48,7 +58,7 @@ The `gitid` command does what the app does, in a terminal. It comes with the app
 - **Linux (.deb):** installed to `/usr/bin/gitid` with the app.
 - **Windows:** the installer adds its folder to your PATH (and the uninstaller removes it). Open a new terminal afterwards.
 - **macOS:** apps are dragged to Applications with no install step, so open gitid and choose **Settings > Command line > Install the gitid command**. It links `/usr/local/bin/gitid` to the copy inside the app, after macOS asks for your password (like VS Code's "Install 'code' command in PATH").
-- **Linux AppImage:** an AppImage can't install commands; use the `.deb`, or the command-only download.
+- **Linux AppImage and the portable Windows zip:** they can't install commands; use the `.deb` or the installer, the command-only download, or (portable Windows) add its folder to your PATH.
 
 Settings > Command line shows whether a terminal will find it. On a machine without a desktop, unpack `gitid-cli-<platform>` and put `gitid` somewhere on your PATH, such as `/usr/local/bin` (or [build it](#building-from-source)).
 
@@ -87,6 +97,15 @@ gitid rule remove work                  # also deletes its identity file
 `rule add` checks the new rule against real repos (inside `--dir`, plus any `--check` folders) and says where it does and doesn't apply. Running it again with the same id adds to that rule; with `--replace` the rule becomes exactly what you pass (folders, servers, name and email), like editing it in the app. `gitid whoami` labels values that come from a rule.
 
 `gitid whoami`, `rule add` and `rule check` exit with **3** when something is wrong (identity missing or guessed, rule not applying), so they can guard scripts or a pre-commit hook.
+
+### Moving rules to another machine
+
+There's no import or export yet, but rules are plain git config, so copying two things moves them:
+
+1. **The identity files:** copy the folder `~/.config/git/identities/` (on Windows, `%USERPROFILE%\.config\git\identities\`) to the same place on the other machine.
+2. **The `includeIf` lines:** open your global config (`~/.gitconfig`, or `~/.config/git/config` if you use that one) and copy every `[includeIf "..."]` section, with the `path = ...` line under it, into the other machine's global config.
+
+Paths are written with `~`, so they work for a different user name. Folder rules only apply if the folder exists at the same place: open the rule in the app (or run `gitid rule check <id> <folder>`) to see where it applies, and edit the folder if it lives elsewhere. Server rules need git 2.36 or newer there too.
 
 ## Building from source
 
@@ -214,3 +233,9 @@ cargo test -p gitid-app  # every error code the backend can send has an English 
 
 - The app's bundle identifier is `com.latecommitoffice.gitid` (`app/src-tauri/tauri.conf.json`). Keep it once released: it names the app's data folder and the approvals macOS remembers, so changing it would strand everyone's saved settings.
 - Maybe, not decided: Developer ID signing and notarization for macOS (needs the Apple Developer Program). The build would read the certificate and Apple account details from GitHub secrets and fall back to ad-hoc signing while they're empty, so joining would need no code change.
+
+## License
+
+Copyright © 2026 The Late Commit Office.
+
+gitid is free software: you can redistribute it and/or modify it under the terms of the [GNU Affero General Public License](LICENSE), version 3 or (at your option) any later version. It comes with no warranty; see the license for details.

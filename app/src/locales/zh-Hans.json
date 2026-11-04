@@ -298,7 +298,7 @@
   "settings.cli.removePrompt": "gitid 想要从 /usr/local/bin 移除 gitid 命令。",
   "settings.cli.taken": "{path} 是另一个 gitid，所以终端不会运行此应用自带的那个。",
   "settings.cli.moveFirst": "要安装 gitid 命令，请先将 gitid 移到“应用程序”文件夹，并从那里打开它。",
-  "settings.cli.notOnPath": "gitid 命令随应用一起安装在 {path}，但它所在的文件夹不在您的 PATH 中，所以终端找不到它。重新安装此应用即可添加。",
+  "settings.cli.notOnPath": "gitid 命令随应用一起提供，位于 {path}，但它所在的文件夹不在您的 PATH 中，所以终端找不到它。将该文件夹添加到 PATH 即可使用。",
   "settings.cli.appImage": "AppImage 无法把 gitid 命令添加到您的系统中。请改为安装 .deb 软件包，或从同一发布页面下载命令行版本。",
   "settings.cli.missing": "此版本的 gitid 不包含 gitid 命令。",
   "error.cliMissing": "此版本的 gitid 不包含 gitid 命令。",
