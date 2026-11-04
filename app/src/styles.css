@@ -747,7 +747,9 @@ button.danger {
 }
 
 .condition input[type="text"] {
-  flex: 1 1 12rem;
+  /* Small enough that a server line (host, "SSH port (optional)", port,
+     Remove) stays on one line at the window's default width. */
+  flex: 1 1 10rem;
 }
 
 .condition input.port {
