@@ -149,6 +149,10 @@ jobs:
         working-directory: target/universal-apple-darwin/release/bundle/macos
         run: |
           mkdir -p "$GITHUB_WORKSPACE/dist"
+          # Ad-hoc signed (bundle > macOS > signingIdentity "-"): fail if the
+          # signature doesn't hold, for the app and the CLI inside it.
+          codesign --verify --deep --strict --verbose=2 gitid.app
+          codesign -dv gitid.app/Contents/MacOS/gitid 2>&1 | grep -E 'Signature|Identifier'
           # Fail if either the app or its CLI is missing an architecture.
           for f in gitid.app/Contents/MacOS/gitid-app gitid.app/Contents/MacOS/gitid; do
             lipo "$f" -verify_arch arm64 x86_64 && lipo -info "$f"

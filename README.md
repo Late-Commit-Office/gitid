@@ -1,6 +1,6 @@
 > **Note:** This repository is mostly coded by an LLM (Claude), with direction and review by a human.
 
-# gitid
+<h1><img src="app/src-tauri/icons/128x128.png" alt="" width="64" height="64" align="absmiddle"> gitid</h1>
 
 See which git identity applies to any folder, and why, so commits never fall back to your OS login name again.
 
@@ -21,7 +21,7 @@ Until the first release, these are under **Artifacts** on a CI run's summary pag
 
 You'll also need [git](https://git-scm.com) itself. gitid finds it, or you can point it at one in Settings.
 
-**macOS:** unpack the `.tar.gz` (double-click it) and drag `gitid.app` to Applications. The app isn't notarized yet, so the first time, right-click it and choose **Open**, or allow it under **System Settings > Privacy & Security**. If macOS says the app is damaged, run `xattr -dr com.apple.quarantine /Applications/gitid.app` in Terminal and open it again.
+**macOS:** unpack the `.tar.gz` (double-click it) and drag `gitid.app` to Applications. The app is signed ad hoc but not notarized by Apple yet, so macOS blocks it the first time: open it once, then choose **Open Anyway** under **System Settings > Privacy & Security** (on macOS 14 and older, right-clicking it and choosing **Open** also works). If macOS still says the app is damaged, run `xattr -dr com.apple.quarantine /Applications/gitid.app` in Terminal (no `sudo` needed) and open it again.
 
 **Windows:** unzip the download and run `gitid_<version>_x64-setup.exe`. It installs for your user only and needs no administrator rights. The installer isn't signed yet, so SmartScreen may warn: choose **More info > Run anyway**.
 
@@ -136,6 +136,8 @@ The bundled `gitid` command is made universal too (`scripts/build-sidecar.mjs` b
 
 Both `tauri dev` and `tauri build` first build the `gitid` command into `app/src-tauri/binaries/` (`npm run sidecar`, see `scripts/build-sidecar.mjs`), so the app can ship it. If you run cargo on the app directly (`cargo clippy -p gitid-app`, `cargo test -p gitid-app`, or an editor's rust-analyzer), run `npm run sidecar` once first, or the build stops with "resource path `binaries/gitid-<target>` doesn't exist".
 
+macOS builds are signed ad hoc (`bundle > macOS > signingIdentity` is `"-"` in `tauri.conf.json`): no Apple account needed, and downloads aren't reported as damaged. Signing with a Developer ID and notarizing needs the Apple Developer Program; then setting `APPLE_SIGNING_IDENTITY` and the other `APPLE_*` variables for `tauri build` overrides the ad-hoc identity.
+
 DevTools (right-click > Inspect Element) are always on in `tauri dev`. Release builds leave them out unless built with `npm run tauri build -- --features devtools`, which CI's test builds use; releases must not, because on macOS it relies on private APIs.
 
 ## Tests
@@ -151,7 +153,7 @@ Integration tests run real git in temp folders with `GIT_CONFIG_GLOBAL` pointed 
 ## Layout
 
 ```
-crates/core    gitid-core: all logic, no UI
+crates/core    gitid-core: all logic, no UI, no required dependencies (serde is optional, for the app and --json)
   git/         locate.rs (find git per OS), runner.rs (the Git trait: only place a process is spawned), version.rs
   config/      model.rs (Scope, Origin, Entry), read.rs (list with origin/scope, per-file reads), write.rs (set/add/unset/replace with an explicit Target), layers.rs (which value wins)
   repo.rs      repository discovery (work tree, git dir)
@@ -210,7 +212,5 @@ cargo test -p gitid-app  # every error code the backend can send has an English 
 
 ## Notes for later steps
 
-- The app's bundle identifier is a placeholder (`io.github.gitid` in `app/src-tauri/tauri.conf.json`). Change it to a reverse domain you own before the first release; changing it later moves the app's data folder.
-- To change the app icon, `npm run tauri icon path/to/icon.png` (a 1024×1024 PNG) regenerates everything in `app/src-tauri/icons/`.
-- Steps 1–2 were built without registry access, so `gitid-core` has no required dependencies (serde is an optional feature).
-- macOS: `/usr/bin/git` may be the Command Line Tools shim; detect with `xcode-select -p` before calling it (TODO in `git/locate.rs`).
+- The app's bundle identifier is `com.latecommitoffice.gitid` (`app/src-tauri/tauri.conf.json`). Keep it once released: it names the app's data folder and the approvals macOS remembers, so changing it would strand everyone's saved settings.
+- Maybe, not decided: Developer ID signing and notarization for macOS (needs the Apple Developer Program). The build would read the certificate and Apple account details from GitHub secrets and fall back to ad-hoc signing while they're empty, so joining would need no code change.
