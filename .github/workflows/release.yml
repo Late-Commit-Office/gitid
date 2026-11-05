@@ -6,8 +6,9 @@ name: Release
 #
 # The tag must match the version in Cargo.toml, app/package.json and
 # app/src-tauri/tauri.conf.json. The builds are CI's (ci.yml, without
-# DevTools); this collects them, with checksums and the notes in
-# .github/release-notes.md, into a draft release to check and publish by hand.
+# DevTools); this collects them, with the notes in .github/release-notes.md,
+# into a draft release to check and publish by hand. GitHub shows each
+# file's SHA-256 on the release page.
 #
 # The publish job asks for `contents: write` itself, so the repository's
 # default workflow permissions can stay read-only. If creating the release
@@ -57,12 +58,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Checksums
-        working-directory: dist
-        run: |
-          ls -la
-          sha256sum * > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+      - run: ls -la dist
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}

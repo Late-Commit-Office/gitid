@@ -19,7 +19,7 @@ In English and Simplified Chinese.
 | `gitid-gui-cli-linux-x64.AppImage` | Other Linux distributions |
 | `gitid-cli-<platform>` | The `gitid` command alone, for machines without a desktop |
 
-`SHA256SUMS.txt` lists each file's checksum. You'll also need [git](https://git-scm.com).
+Each file's SHA-256 is shown next to it below. You'll also need [git](https://git-scm.com).
 
 ## First launch
 

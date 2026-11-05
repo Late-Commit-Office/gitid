@@ -18,7 +18,6 @@ Download from the [Releases page](https://github.com/Late-Commit-Office/gitid/re
 | `gitid-gui-cli-linux-x64.deb` | The app for Debian and Ubuntu, with the `gitid` command |
 | `gitid-gui-cli-linux-x64.AppImage` | The app for other Linux distributions, with the `gitid` command inside |
 | `gitid-cli-<platform>` | The `gitid` command alone, for machines without a desktop (a server) |
-| `SHA256SUMS.txt` | Each file's checksum, to check a download |
 
 There's no build for Arm Linux or Windows on Arm yet; [build from source](#building-from-source) there. Builds of the latest code, between releases, are under **Artifacts** on a CI run's summary page.
 
