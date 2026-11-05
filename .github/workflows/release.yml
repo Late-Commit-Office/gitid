@@ -54,11 +54,30 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+      # CI uploads each download as a single file (archive: false). Without
+      # skip-decompress, download-artifact unzips any that are zips (the
+      # Windows ones), and their contents replace them.
       - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
-      - run: ls -la dist
+          skip-decompress: true
+      - name: Exactly the expected downloads
+        working-directory: dist
+        run: |
+          ls -la
+          expected="gitid-gui-cli-macos-universal.tar.gz
+          gitid-gui-cli-windows-x64-setup.exe
+          gitid-gui-cli-windows-x64-portable.zip
+          gitid-gui-cli-linux-x64.deb
+          gitid-gui-cli-linux-x64.AppImage
+          gitid-cli-macos-universal.tar.gz
+          gitid-cli-windows-x64.zip
+          gitid-cli-linux-x64.tar.gz"
+          diff <(echo "$expected" | sed 's/^ *//' | sort) <(ls -1 | sort) || {
+            echo "::error::The downloads aren't the expected eight files (< missing, > unexpected)"
+            exit 1
+          }
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
