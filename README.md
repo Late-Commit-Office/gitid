@@ -2,6 +2,8 @@
 
 <h1><img src="app/src-tauri/icons/128x128.png" alt="" width="64" height="64" align="absmiddle"> gitid</h1>
 
+English | [简体中文](README.zh-Hans.md)
+
 See which git identity applies to any folder, and why, so commits never fall back to your OS login name again.
 
 Status: **all v1 features are in.** The `gitid` CLI and the desktop app explain the effective identity, manage per-folder and per-server identity rules, show and edit all config with which value wins, scan folders for repos with a wrong identity, and edit your global settings.
@@ -210,6 +212,7 @@ The app is in English and Simplified Chinese. It follows the system language (Si
 - **Changing English text:** the checks then list the Chinese entries made from the old English. Update them, then run the `--update` command above.
 - **Adding a language:** add `app/src/locales/<tag>.json` and its name in `LOCALES` / `LOCALE_NAMES` (`src/lib/i18n.ts`), and map its system tags in `matchLocale`.
 - **Pseudo-language:** development builds (`npm run tauri dev`) offer "Pseudo (en-XA)" in Settings. It shows every entry accented and a third longer, so text that skipped the catalog stays plain English, and layouts too tight for longer words show.
+- **README:** `README.zh-Hans.md` is the Chinese translation of this file. Update it along with any change here.
 
 Checks (all run in CI):
 
