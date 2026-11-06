@@ -5,7 +5,15 @@ on:
   # file with `release: true`.
   push:
     branches: ["**"]
+    # A push or PR that only changes these skips CI. The release
+    # (release.yml, on tags) is unaffected and always builds.
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
   workflow_call:
     inputs:
       release:
