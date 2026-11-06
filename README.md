@@ -18,8 +18,8 @@ Download from the [Releases page](https://github.com/Late-Commit-Office/gitid/re
 | `gitid-gui-cli-windows-x64-setup.exe` | The app's installer for 64-bit Windows, with the `gitid` command |
 | `gitid-gui-cli-windows-x64-portable.zip` | The same app and command for Windows, without an installer |
 | `gitid-gui-cli-linux-x64.deb` | The app for Debian and Ubuntu, with the `gitid` command |
-| `gitid-gui-cli-linux-x64.AppImage` | The app for other Linux distributions, with the `gitid` command inside |
-| `gitid-cli-<platform>` | The `gitid` command alone, for machines without a desktop (a server) |
+| `gitid-gui-cli-linux-x64.AppImage` | The app for other Linux distributions from 2022 or later (glibc 2.35 or newer, such as Fedora 36+), with the `gitid` command inside |
+| `gitid-cli-<platform>` | The `gitid` command alone, for machines without a desktop (a server). The Linux one is a static build, so it runs on any 64-bit Linux, however old |
 
 There's no build for Arm Linux or Windows on Arm yet; [build from source](#building-from-source) there. Builds of the latest code, between releases, are under **Artifacts** on a CI run's summary page.
 

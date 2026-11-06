@@ -20,8 +20,8 @@
 | `gitid-gui-cli-windows-x64-setup.exe` | 64 位 Windows 版应用的安装程序，含 `gitid` 命令 |
 | `gitid-gui-cli-windows-x64-portable.zip` | 同样的 Windows 应用和命令，无需安装 |
 | `gitid-gui-cli-linux-x64.deb` | Debian 和 Ubuntu 版应用，含 `gitid` 命令 |
-| `gitid-gui-cli-linux-x64.AppImage` | 其他 Linux 发行版的应用，内含 `gitid` 命令 |
-| `gitid-cli-<平台>` | 仅 `gitid` 命令，用于没有桌面的机器（服务器） |
+| `gitid-gui-cli-linux-x64.AppImage` | 2022 年及之后的其他 Linux 发行版（glibc 2.35 或更新，例如 Fedora 36+）的应用，内含 `gitid` 命令 |
+| `gitid-cli-<平台>` | 仅 `gitid` 命令，用于没有桌面的机器（服务器）。Linux 版是静态构建的，可在任何 64 位 Linux 上运行，不论多旧 |
 
 目前还没有 Arm Linux 和 Windows on Arm 的版本；在这些平台上请[从源代码构建](#从源代码构建)。两次发布之间最新代码的构建，在 CI 运行摘要页面的 **Artifacts** 中。
 

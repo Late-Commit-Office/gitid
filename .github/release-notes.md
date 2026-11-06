@@ -16,8 +16,8 @@ In English and Simplified Chinese.
 | `gitid-gui-cli-windows-x64-setup.exe` | Windows: installer, for your user only (no administrator rights) |
 | `gitid-gui-cli-windows-x64-portable.zip` | Windows: no installer, run it from any folder |
 | `gitid-gui-cli-linux-x64.deb` | Debian and Ubuntu 22.04 or newer |
-| `gitid-gui-cli-linux-x64.AppImage` | Other Linux distributions |
-| `gitid-cli-<platform>` | The `gitid` command alone, for machines without a desktop |
+| `gitid-gui-cli-linux-x64.AppImage` | Other Linux distributions from 2022 or later (glibc 2.35 or newer) |
+| `gitid-cli-<platform>` | The `gitid` command alone, for machines without a desktop; the Linux one runs on any 64-bit Linux |
 
 Each file's SHA-256 is shown next to it below. You'll also need [git](https://git-scm.com).
 

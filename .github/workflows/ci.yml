@@ -30,6 +30,9 @@ jobs:
         include:
           - os: ubuntu-latest
             name: linux-x64
+            # The command-only download is static (musl), so it runs on any
+            # x86-64 Linux, however old its glibc: servers included.
+            targets: x86_64-unknown-linux-musl
           # Universal: one file for Apple silicon and Intel Macs.
           - os: macos-latest
             name: macos-universal
@@ -56,9 +59,20 @@ jobs:
 
       # ---- Builds: downloadable from the run's summary page; release.yml
       # collects them into a draft release.
-      - name: Build CLI
-        if: runner.os != 'macOS'
+      - name: Build CLI (Windows)
+        if: runner.os == 'Windows'
         run: cargo build --release -p gitid
+      # Static: no system libraries needed, not even glibc. Copied to the
+      # usual place for packaging. Fails if the result isn't static.
+      - name: Build CLI (Linux, static)
+        if: runner.os == 'Linux'
+        run: |
+          cargo build --release -p gitid --target x86_64-unknown-linux-musl
+          mkdir -p target/release
+          cp target/x86_64-unknown-linux-musl/release/gitid target/release/gitid
+          file target/release/gitid
+          file target/release/gitid | grep -Eq 'statically linked|static-pie linked'
+          target/release/gitid --version
       # Both Mac architectures, joined into one universal file at the usual place.
       - name: Build CLI (macOS, universal)
         if: runner.os == 'macOS'
