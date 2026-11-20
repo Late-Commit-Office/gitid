@@ -59,6 +59,8 @@ fn main() -> ExitCode {
             None => rule::list(&git, false),
             Some(RuleCmd::List { json }) => rule::list(&git, *json),
             Some(RuleCmd::Add(a)) => rule::add(&git, version, a),
+            Some(RuleCmd::Use { id, path }) => rule::use_rule(&git, id, path),
+            Some(RuleCmd::Unuse { id, path, host }) => rule::unuse(&git, id, path, host.as_deref()),
             Some(RuleCmd::Check { id, path }) => rule::check(&git, id, path),
             Some(RuleCmd::Remove { id, keep_file }) => rule::remove(&git, id, *keep_file),
         },

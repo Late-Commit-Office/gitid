@@ -409,3 +409,302 @@ fn sample_repos_finds_the_folder_and_its_children() {
     assert_eq!(found, vec![code.clone(), code.join("a"), code.join("b")]);
     assert_eq!(rules::sample_repos(&code, 1).len(), 2);
 }
+
+// ------------------------------------------------- 0.1.1: use, unuse, ids
+
+fn work_rule(t: &TestEnv, dir: &std::path::Path) -> rules::Rule {
+    rules::add_rule(
+        t.git(),
+        version(t),
+        &NewRule {
+            id: "work".into(),
+            name: Some("Ann Lee".into()),
+            email: Some("ann@corp.example".into()),
+            when: vec![When::Folder(dir.to_path_buf())],
+        },
+    )
+    .unwrap()
+}
+
+fn folder_patterns(rule: &rules::Rule) -> Vec<String> {
+    rule.conditions
+        .iter()
+        .filter_map(|c| match c {
+            Condition::Folder { pattern, .. } => Some(pattern.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn reload(t: &TestEnv, id: &str) -> rules::Rule {
+    let all = rules::list_rules(t.git()).unwrap();
+    rules::find(&all, id).unwrap().clone()
+}
+
+#[test]
+fn extending_a_rule_needs_no_name_or_email() {
+    let t = TestEnv::new("r-extend");
+    base_identity(&t);
+    let work = t.mkdir("home/work");
+    let more = t.mkdir("home/more");
+    work_rule(&t, &work);
+
+    let extended = rules::add_rule(
+        t.git(),
+        version(&t),
+        &NewRule {
+            id: "work".into(),
+            name: None,
+            email: None,
+            when: vec![When::Folder(more)],
+        },
+    )
+    .unwrap();
+    assert_eq!(folder_patterns(&extended), ["~/work/", "~/more/"]);
+    // Name and email are kept, not removed.
+    assert_eq!(extended.name.as_deref(), Some("Ann Lee"));
+    assert_eq!(extended.email.as_deref(), Some("ann@corp.example"));
+
+    // A new rule, and --replace, still need one.
+    for (id, replace) in [("new", false), ("work", true)] {
+        let r = NewRule {
+            id: id.into(),
+            name: None,
+            email: None,
+            when: vec![When::Folder(work.clone())],
+        };
+        let err = if replace {
+            rules::replace_rule(t.git(), version(&t), &r)
+        } else {
+            rules::add_rule(t.git(), version(&t), &r)
+        }
+        .unwrap_err();
+        assert!(err.to_string().contains("needs a name, an email"), "{err}");
+    }
+}
+
+#[test]
+fn new_rule_ids_cant_start_with_a_digit() {
+    let t = TestEnv::new("r-digit");
+    let work = t.mkdir("home/work");
+    let r = |id: &str| NewRule {
+        id: id.into(),
+        name: None,
+        email: Some("a@b.example".into()),
+        when: vec![When::Folder(work.clone())],
+    };
+    assert!(rules::add_rule(t.git(), version(&t), &r("2fa")).is_err());
+    assert!(rules::list_rules(t.git()).unwrap().is_empty()); // nothing written
+
+    // One that already exists (written by hand, or by v0.1.0) keeps working.
+    t.write_file(
+        "home/.config/git/identities/2fa.gitconfig",
+        "[user]\n\temail = a@b.example\n",
+    );
+    t.global_set(
+        "includeIf.gitdir:~/work/.path",
+        "~/.config/git/identities/2fa.gitconfig",
+    );
+    let more = t.mkdir("home/more");
+    let mut extend = r("2fa");
+    extend.email = None;
+    extend.when = vec![When::Folder(more)];
+    let rule = rules::add_rule(t.git(), version(&t), &extend).unwrap();
+    assert_eq!(folder_patterns(&rule), ["~/work/", "~/more/"]);
+}
+
+#[test]
+fn use_names_the_repo_top_from_a_subfolder() {
+    let t = TestEnv::new("r-use");
+    base_identity(&t);
+    let work = t.mkdir("home/work");
+    let rule = work_rule(&t, &work);
+    let app = t.init_repo("home/code/app");
+    let src = t.mkdir("home/code/app/src");
+    assert_eq!(email_in(&t, &src).as_deref(), Some("ann@home.example"));
+
+    let (target, used) = rules::use_rule(t.git(), &rule, &src).unwrap();
+    assert_eq!(used, rules::Used::Added);
+    assert_eq!(target.folder, app);
+    assert!(target.in_repo);
+    let rule = reload(&t, "work");
+    assert_eq!(folder_patterns(&rule), ["~/work/", "~/code/app/"]);
+    assert_eq!(email_in(&t, &src).as_deref(), Some("ann@corp.example"));
+
+    // Again, from the top this time: nothing new.
+    let (_, used) = rules::use_rule(t.git(), &rule, &app).unwrap();
+    assert_eq!(used, rules::Used::AlreadyNamed);
+    // A repo already covered through ~/work: nothing new.
+    let api = t.init_repo("home/work/api");
+    let (_, used) = rules::use_rule(t.git(), &rule, &api).unwrap();
+    assert_eq!(used, rules::Used::AlreadyApplies);
+    assert_eq!(reload(&t, "work").conditions.len(), 2);
+}
+
+#[test]
+fn use_outside_a_repo_names_the_folder() {
+    let t = TestEnv::new("r-use-folder");
+    base_identity(&t);
+    let rule = work_rule(&t, &t.mkdir("home/work"));
+    let clients = t.mkdir("home/clients");
+    let repo = t.init_repo("home/clients/acme");
+
+    let (target, used) = rules::use_rule(t.git(), &rule, &clients).unwrap();
+    assert_eq!(used, rules::Used::Added);
+    assert_eq!(target.folder, clients);
+    assert!(!target.in_repo);
+    assert_eq!(email_in(&t, &repo).as_deref(), Some("ann@corp.example"));
+}
+
+#[test]
+fn use_in_a_linked_worktree_or_submodule_names_where_git_looks() {
+    let t = TestEnv::new("r-use-wt");
+    base_identity(&t);
+    let rule = work_rule(&t, &t.mkdir("home/work"));
+    let main = t.init_repo("home/code/main");
+    t.sh(Some(&main), &["commit", "-q", "--allow-empty", "-m", "x"]);
+    let wt = t.root.join("home/elsewhere/wt");
+    t.sh(
+        Some(&main),
+        &["worktree", "add", "-q", wt.to_str().unwrap()],
+    );
+
+    let (target, _) = rules::use_rule(t.git(), &rule, &wt).unwrap();
+    // The worktree's git folder is inside main/.git, so the rule names main.
+    assert_eq!(target.folder, main);
+    assert_eq!(
+        target.work_tree.as_deref(),
+        Some(gitid_core::paths::canonicalize(&wt).unwrap().as_path())
+    );
+    assert_eq!(email_in(&t, &wt).as_deref(), Some("ann@corp.example"));
+
+    let lib = t.init_repo("home/code/lib");
+    t.sh(Some(&lib), &["commit", "-q", "--allow-empty", "-m", "x"]);
+    let sup = t.init_repo("home/code/super");
+    t.sh(
+        Some(&sup),
+        &[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            "-q",
+            lib.to_str().unwrap(),
+            "lib",
+        ],
+    );
+    let sub = sup.join("lib");
+    let rule = reload(&t, "work");
+    let (target, _) = rules::use_rule(t.git(), &rule, &sub).unwrap();
+    assert_eq!(target.folder, sup.join(".git/modules/lib"));
+    assert_eq!(email_in(&t, &sub).as_deref(), Some("ann@corp.example"));
+    assert_eq!(email_in(&t, &sup).as_deref(), Some("ann@home.example"));
+
+    // unuse finds the same folder again.
+    let rule = reload(&t, "work");
+    let (_, unused) = rules::unuse_folder(t.git(), &rule, &sub).unwrap();
+    assert!(matches!(unused, rules::Unused::Removed(_)), "{unused:?}");
+    assert_eq!(email_in(&t, &sub).as_deref(), Some("ann@home.example"));
+}
+
+#[test]
+fn unuse_removes_one_folder_and_keeps_the_rest() {
+    let t = TestEnv::new("r-unuse");
+    base_identity(&t);
+    let work = t.mkdir("home/work");
+    let rule = work_rule(&t, &work);
+    let app = t.init_repo("home/code/app");
+    rules::use_rule(t.git(), &rule, &app).unwrap();
+    let rule = reload(&t, "work");
+
+    let src = t.mkdir("home/code/app/src");
+    let (_, unused) = rules::unuse_folder(t.git(), &rule, &src).unwrap();
+    assert!(
+        matches!(&unused, rules::Unused::Removed(c) if c.len() == 1),
+        "{unused:?}"
+    );
+    let rule = reload(&t, "work");
+    assert_eq!(folder_patterns(&rule), ["~/work/"]);
+    assert_eq!(rule.email.as_deref(), Some("ann@corp.example"));
+    assert!(rule.file.is_file());
+    assert_eq!(email_in(&t, &app).as_deref(), Some("ann@home.example"));
+
+    // Not named and doesn't apply: nothing to do.
+    let (_, unused) = rules::unuse_folder(t.git(), &rule, &app).unwrap();
+    assert_eq!(unused, rules::Unused::NotHere);
+
+    // Applies through ~/work, which can't leave one repo out.
+    let api = t.init_repo("home/work/api");
+    let (_, unused) = rules::unuse_folder(t.git(), &rule, &api).unwrap();
+    assert!(
+        matches!(unused, rules::Unused::AppliesThrough(_)),
+        "{unused:?}"
+    );
+
+    // The last condition: refused, nothing written.
+    let (_, unused) = rules::unuse_folder(t.git(), &rule, &work).unwrap();
+    assert_eq!(unused, rules::Unused::OnlyCondition);
+    assert_eq!(reload(&t, "work").conditions, rule.conditions);
+}
+
+#[test]
+fn unuse_a_server_removes_its_whole_set() {
+    let t = TestEnv::new("r-unuse-host");
+    if !version(&t).supports_hasconfig() {
+        return;
+    }
+    base_identity(&t);
+    let work = t.mkdir("home/work");
+    work_rule(&t, &work);
+    let rule = rules::add_rule(
+        t.git(),
+        version(&t),
+        &NewRule {
+            id: "work".into(),
+            name: None,
+            email: None,
+            when: vec![When::RemoteHost {
+                host: "gitea.example:3000".into(),
+                ssh_port: Some(2222),
+            }],
+        },
+    )
+    .unwrap();
+    assert_eq!(rule.conditions.len(), 6);
+
+    let unused = rules::unuse_host(t.git(), &rule, "https://GITEA.example:3000/").unwrap();
+    assert!(
+        matches!(&unused, rules::Unused::Removed(c) if c.len() == 5),
+        "{unused:?}"
+    );
+    assert_eq!(folder_patterns(&reload(&t, "work")), ["~/work/"]);
+    assert_eq!(
+        rules::unuse_host(t.git(), &reload(&t, "work"), "other.example").unwrap(),
+        rules::Unused::NotHere
+    );
+}
+
+#[test]
+fn unuse_cleans_up_a_folder_rule_inside_a_repo() {
+    // What `gitid rule add work --dir .` wrote from repo/src in v0.1.0.
+    let t = TestEnv::new("r-unuse-src");
+    base_identity(&t);
+    work_rule(&t, &t.mkdir("home/work"));
+    t.init_repo("home/code/app");
+    let src = t.mkdir("home/code/app/src");
+    let rule = rules::add_rule(
+        t.git(),
+        version(&t),
+        &NewRule {
+            id: "work".into(),
+            name: None,
+            email: None,
+            when: vec![When::Folder(src.clone())],
+        },
+    )
+    .unwrap();
+    assert_eq!(folder_patterns(&rule), ["~/work/", "~/code/app/src/"]);
+    let (_, unused) = rules::unuse_folder(t.git(), &rule, &src).unwrap();
+    assert!(matches!(unused, rules::Unused::Removed(_)), "{unused:?}");
+    assert_eq!(folder_patterns(&reload(&t, "work")), ["~/work/"]);
+}

@@ -10,6 +10,7 @@ EXAMPLES:
     gitid set user.useConfigOnly true
     gitid rule add work  --email ann@company.example --dir ~/work
     gitid rule add gitea --name annlee --email ann@gitea.example --host gitea.example.com --ssh-port 2222
+    gitid rule use work                 (in a repo: use rule work there too; or its number from `rule list`)
 
 EXIT CODES:
     0  ok                             3  identity missing/guessed, or a rule doesn't apply
@@ -114,6 +115,23 @@ pub enum RuleCmd {
     },
     /// Add a rule, or update the rule with this ID
     Add(AddArgs),
+    /// Use a rule in PATH too (its repo, or the folder if it isn't one)
+    Use {
+        /// Rule ID or number from `gitid rule list`
+        id: String,
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+    /// Stop using a rule in PATH, or for a server with --host
+    Unuse {
+        /// Rule ID or number from `gitid rule list`
+        id: String,
+        #[arg(default_value = ".", conflicts_with = "host")]
+        path: PathBuf,
+        /// A server the rule was added for, instead of a folder
+        #[arg(long, value_name = "SERVER")]
+        host: Option<String>,
+    },
     /// Does a rule apply in PATH?
     Check {
         /// Rule ID or number from `gitid rule list`
@@ -121,8 +139,8 @@ pub enum RuleCmd {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
-    /// Remove a rule (and the identity file gitid created for it)
-    #[command(alias = "rm")]
+    /// Delete a rule (and the identity file gitid created for it)
+    #[command(name = "rm", alias = "remove")]
     Remove {
         /// Rule ID or number from `gitid rule list`
         id: String,
@@ -366,6 +384,33 @@ mod tests {
                 })
             }
         );
+        for name in ["rm", "remove"] {
+            assert!(matches!(
+                cmd(&["rule", name, "2"]),
+                Cmd::Rule {
+                    command: Some(RuleCmd::Remove { .. })
+                }
+            ));
+        }
+        assert_eq!(
+            cmd(&["rule", "use", "2"]),
+            Cmd::Rule {
+                command: Some(RuleCmd::Use {
+                    id: "2".into(),
+                    path: ".".into()
+                })
+            }
+        );
+        assert_eq!(
+            cmd(&["rule", "unuse", "work", "--host", "g.example"]),
+            Cmd::Rule {
+                command: Some(RuleCmd::Unuse {
+                    id: "work".into(),
+                    path: ".".into(),
+                    host: Some("g.example".into())
+                })
+            }
+        );
         assert_eq!(
             cmd(&["rule", "check", "work"]),
             Cmd::Rule {
@@ -389,6 +434,8 @@ mod tests {
             &["rule", "add", "w", "--dir", "x", "--ssh-port", "22"], // --ssh-port needs --host
             &["rule", "add", "w", "--host", "h", "--ssh-port", "x"],
             &["rule", "add"],
+            &["rule", "use"],
+            &["rule", "unuse", "w", "~/x", "--host", "h"], // a folder or a server, not both
             &["set", "a.b", "c", "--all"],
         ] {
             assert!(parse(bad).is_err(), "{bad:?}");

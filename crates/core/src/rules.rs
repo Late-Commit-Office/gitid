@@ -331,8 +331,20 @@ fn check_id(id: &str) -> Result<()> {
     }
 }
 
-fn check_identity(name: Option<&str>, email: Option<&str>) -> Result<()> {
-    if name.is_none() && email.is_none() {
+/// A new rule's id also can't start with a digit, so a number given to
+/// [`find`] always means a position in the list. Existing rules keep their ids.
+fn check_new_id(id: &str) -> Result<()> {
+    check_id(id)?;
+    if id.starts_with(|c: char| c.is_ascii_digit()) {
+        return Err(Invalid::BadRuleId { id: id.to_string() }.into());
+    }
+    Ok(())
+}
+
+/// `required`: the rule must end up with a name or an email. Not required when
+/// extending a rule whose identity file already has one.
+fn check_identity(name: Option<&str>, email: Option<&str>, required: bool) -> Result<()> {
+    if required && name.is_none() && email.is_none() {
         return Err(Invalid::RuleNeedsIdentity.into());
     }
     if name.is_some_and(|n| n.trim().is_empty() || n.contains(['<', '>', '\n'])) {
@@ -376,7 +388,6 @@ fn needs_hasconfig(w: &When) -> bool {
 
 fn save_rule(git: &dyn Git, version: GitVersion, new: &NewRule, replace: bool) -> Result<Rule> {
     check_id(&new.id)?;
-    check_identity(new.name.as_deref(), new.email.as_deref())?;
     if new.when.is_empty() {
         return Err(Invalid::RuleNeedsWhere.into());
     }
@@ -389,8 +400,25 @@ fn save_rule(git: &dyn Git, version: GitVersion, new: &NewRule, replace: bool) -
     }
 
     let home = platform::home_dir(git).ok_or(Error::Invalid(Invalid::NoHome))?;
+    let dir = home.join(IDENTITIES_DIR);
+    let file = dir.join(format!("{}.gitconfig", new.id));
+    let existing = {
+        let file = paths::simplify(file.clone());
+        list_rules(git)?.into_iter().find(|r| r.file == file)
+    };
 
-    // Work out every condition first, so bad input writes nothing.
+    // Check everything first, so bad input writes nothing.
+    if existing.is_none() {
+        check_new_id(&new.id)?;
+    }
+    let has_identity = existing
+        .as_ref()
+        .is_some_and(|r| r.name.is_some() || r.email.is_some());
+    check_identity(
+        new.name.as_deref(),
+        new.email.as_deref(),
+        replace || !has_identity,
+    )?;
     let mut conditions = Vec::new();
     for w in &new.when {
         for c in conditions_for(w, Some(&home))? {
@@ -400,14 +428,7 @@ fn save_rule(git: &dyn Git, version: GitVersion, new: &NewRule, replace: bool) -
         }
     }
 
-    let dir = home.join(IDENTITIES_DIR);
-    let file = dir.join(format!("{}.gitconfig", new.id));
-    let previous = if replace {
-        let file = paths::simplify(file.clone());
-        list_rules(git)?.into_iter().find(|r| r.file == file)
-    } else {
-        None
-    };
+    let previous = if replace { existing } else { None };
 
     // 1. The identity file. Written before the includes, so an include never
     //    points at a missing file.
@@ -467,6 +488,220 @@ pub fn remove_rule(git: &dyn Git, rule: &Rule, delete_file: bool) -> Result<()> 
         })?;
     }
     Ok(())
+}
+
+// ---------------------------------------------------------- use and unuse
+
+/// The folder a rule names to cover a path, for `rule use` and `rule unuse`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuleFolder {
+    /// What the rule names. git matches `gitdir:` against where a repo's git
+    /// folder is, so inside a repo this is the folder that holds `.git`: the
+    /// repo's top, the main repo for a linked worktree, or the git folder
+    /// itself for a submodule or a bare repo. Outside a repo, the path itself.
+    pub folder: PathBuf,
+    /// `folder` is a git folder itself (a submodule's or a bare repo's), so the
+    /// rule names exactly it: `gitdir:<folder>` with no trailing slash, which
+    /// git would read as "repos inside it".
+    pub exact: bool,
+    /// The repo's top folder, when the path is inside a repo's working tree.
+    pub work_tree: Option<PathBuf>,
+    pub in_repo: bool,
+}
+
+/// Which folder a rule should name so that it covers `path`.
+pub fn rule_folder(git: &dyn Git, path: &Path) -> Result<RuleFolder> {
+    if !path.is_dir() {
+        return Err(Error::NotADirectory(path.to_path_buf()));
+    }
+    let path = paths::canonicalize(path).map_err(|source| Error::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let Some(repo) = crate::repo::discover(git, &path)? else {
+        return Ok(RuleFolder {
+            folder: path,
+            exact: false,
+            work_tree: None,
+            in_repo: false,
+        });
+    };
+    let out = git.run(Some(&path), &["rev-parse", "--git-common-dir"])?;
+    let common = if out.success() {
+        // Relative to the folder git ran in.
+        path.join(out.stdout_str().trim_end_matches(['\n', '\r']))
+    } else {
+        repo.git_dir.clone()
+    };
+    let common = paths::canonicalize(&common).unwrap_or(common);
+    let (folder, exact) = match (common.file_name(), common.parent()) {
+        (Some(name), Some(parent)) if name == ".git" => (parent.to_path_buf(), false),
+        _ => (common, true),
+    };
+    Ok(RuleFolder {
+        folder,
+        exact,
+        work_tree: repo.work_tree.map(|w| paths::canonicalize(&w).unwrap_or(w)),
+        in_repo: true,
+    })
+}
+
+/// The condition `rule use` writes for `target`.
+fn condition_for(target: &RuleFolder, home: Option<&Path>) -> Condition {
+    let pattern = platform::gitdir_pattern(&target.folder, home);
+    Condition::Folder {
+        pattern: if target.exact {
+            pattern.trim_end_matches('/').to_string()
+        } else {
+            pattern
+        },
+        case_insensitive: platform::case_insensitive_fs(),
+    }
+}
+
+/// The rule's folder conditions that name `target` (written by gitid or by
+/// hand, with or without `/i`, as `~/...` or as a full path).
+fn naming<'a>(rule: &'a Rule, target: &RuleFolder, home: Option<&Path>) -> Vec<&'a Condition> {
+    let Condition::Folder { pattern: ours, .. } = condition_for(target, home) else {
+        unreachable!()
+    };
+    rule.conditions
+        .iter()
+        .filter(|c| match c {
+            Condition::Folder { pattern, .. } => {
+                *pattern == ours
+                    || (!target.exact
+                        && folder_of(pattern, home)
+                            .map(|f| paths::canonicalize(&f).unwrap_or(f))
+                            .is_some_and(|f| f == target.folder))
+            }
+            _ => false,
+        })
+        .collect()
+}
+
+/// What `rule use` did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Used {
+    /// Added a condition for the folder.
+    Added,
+    /// The rule already names this folder; nothing written.
+    AlreadyNamed,
+    /// The rule already applies here through another condition; nothing written.
+    AlreadyApplies,
+}
+
+/// Make `rule` apply in `path` too: add its folder (see [`rule_folder`]) to
+/// the rule's conditions, unless the rule covers it already.
+pub fn use_rule(git: &dyn Git, rule: &Rule, path: &Path) -> Result<(RuleFolder, Used)> {
+    let target = rule_folder(git, path)?;
+    let home = platform::home_dir(git);
+    if !naming(rule, &target, home.as_deref()).is_empty() {
+        return Ok((target, Used::AlreadyNamed));
+    }
+    if target.in_repo && applies_in(git, rule, path)? {
+        return Ok((target, Used::AlreadyApplies));
+    }
+    let condition = condition_for(&target, home.as_deref());
+    config::add(git, &Target::Global, &condition.key(), &rule.include_path)?;
+    Ok((target, Used::Added))
+}
+
+/// What `rule unuse` did, or why it didn't.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Unused {
+    /// Removed these conditions.
+    Removed(Vec<Condition>),
+    /// Refused: these are the rule's only conditions, so removing them would
+    /// leave a rule that applies nowhere. Deleting the rule is a separate step.
+    OnlyCondition,
+    /// The rule doesn't name this place but applies there through other
+    /// conditions; nothing written. git can't leave one folder out of a rule.
+    AppliesThrough(Vec<Described>),
+    /// The rule doesn't apply here; nothing to do.
+    NotHere,
+}
+
+fn remove_conditions(git: &dyn Git, rule: &Rule, matched: Vec<Condition>) -> Result<Unused> {
+    if matched.len() == rule.conditions.len() {
+        return Ok(Unused::OnlyCondition);
+    }
+    for c in &matched {
+        config::unset_value(git, &Target::Global, &c.key(), &rule.include_path)?;
+    }
+    Ok(Unused::Removed(matched))
+}
+
+/// Stop `rule` applying in `path`: remove the condition naming its folder
+/// (see [`rule_folder`]). The rule's other conditions and its file stay.
+pub fn unuse_folder(git: &dyn Git, rule: &Rule, path: &Path) -> Result<(RuleFolder, Unused)> {
+    let target = rule_folder(git, path)?;
+    let home = platform::home_dir(git);
+    let mut matched: Vec<Condition> = naming(rule, &target, home.as_deref())
+        .into_iter()
+        .cloned()
+        .collect();
+    // Also the path exactly as given: `gitid rule unuse work ~/code/app/src`
+    // cleans up a rule that `rule add --dir .` wrote from inside a repo.
+    let given = RuleFolder {
+        folder: paths::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()),
+        exact: false,
+        work_tree: None,
+        in_repo: false,
+    };
+    if given.folder != target.folder {
+        for c in naming(rule, &given, home.as_deref()) {
+            if !matched.contains(c) {
+                matched.push(c.clone());
+            }
+        }
+    }
+    if !matched.is_empty() {
+        return Ok((target, remove_conditions(git, rule, matched)?));
+    }
+    if target.in_repo && applies_in(git, rule, path)? {
+        // Leave out folders that can't be the reason, so the list is short.
+        let through: Vec<Condition> = rule
+            .conditions
+            .iter()
+            .filter(|c| match c {
+                Condition::Folder { pattern, .. } => folder_of(pattern, home.as_deref())
+                    .map(|f| paths::canonicalize(&f).unwrap_or(f))
+                    .is_none_or(|f| target.folder.starts_with(&f)),
+                _ => true,
+            })
+            .cloned()
+            .collect();
+        return Ok((target, Unused::AppliesThrough(described(&through))));
+    }
+    Ok((target, Unused::NotHere))
+}
+
+/// Stop `rule` applying to repos on `host`: remove the set of patterns
+/// [`When::RemoteHost`] wrote for that server.
+pub fn unuse_host(git: &dyn Git, rule: &Rule, host: &str) -> Result<Unused> {
+    let (web, _) = clean_host(host)?;
+    let found = group(&rule.conditions).into_iter().find_map(|g| match g {
+        Grouped::Host { web: w, ssh_port } if w.eq_ignore_ascii_case(&web) => Some((w, ssh_port)),
+        _ => None,
+    });
+    let Some((w, ssh_port)) = found else {
+        return Ok(Unused::NotHere);
+    };
+    let patterns = conditions_for(
+        &When::RemoteHost {
+            host: w,
+            ssh_port: ssh_port.and_then(|p| p.parse().ok()),
+        },
+        None,
+    )?;
+    let matched = rule
+        .conditions
+        .iter()
+        .filter(|c| patterns.contains(c))
+        .cloned()
+        .collect();
+    remove_conditions(git, rule, matched)
 }
 
 /// A rule's conditions as a person thinks of them: the set of patterns that
@@ -844,10 +1079,16 @@ mod tests {
         for id in ["", "../x", "a b", "-x", "a.b"] {
             assert!(check_id(id).is_err(), "{id:?}");
         }
-        assert!(check_identity(None, None).is_err());
-        assert!(check_identity(Some("Ann"), Some("not-an-email")).is_err());
-        assert!(check_identity(Some("Ann <x>"), None).is_err());
-        assert!(check_identity(None, Some("ann@example.com")).is_ok());
+        // New rules: a number always means a position in `gitid rule list`.
+        assert!(check_new_id("work2").is_ok() && check_new_id("_x").is_ok());
+        for id in ["2", "2fa", "0work"] {
+            assert!(check_id(id).is_ok() && check_new_id(id).is_err(), "{id:?}");
+        }
+        assert!(check_identity(None, None, true).is_err());
+        assert!(check_identity(None, None, false).is_ok()); // extending a rule
+        assert!(check_identity(Some("Ann"), Some("not-an-email"), false).is_err());
+        assert!(check_identity(Some("Ann <x>"), None, true).is_err());
+        assert!(check_identity(None, Some("ann@example.com"), true).is_ok());
     }
 
     #[test]

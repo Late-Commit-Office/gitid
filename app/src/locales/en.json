@@ -88,7 +88,7 @@
   "error.nameAngleBrackets": "A name can't contain < or >.",
   "error.badEmail": "“{email}” doesn't look like an email address.",
   "error.badBranchName": "“{name}” isn't a valid branch name.",
-  "error.badRuleId": "“{id}” can't be a rule name. Use letters, digits, - and _ (like work or gitea).",
+  "error.badRuleId": "“{id}” can't be a rule name. Use letters, digits, - and _, not starting with a digit or - (like work or gitea).",
   "error.ruleNeedsIdentity": "A rule needs a name, an email, or both.",
   "error.badRuleName": "The name can't be empty or contain <, > or line breaks.",
   "error.ruleNeedsWhere": "A rule needs at least one folder or server.",

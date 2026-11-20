@@ -88,7 +88,7 @@
   "error.nameAngleBrackets": "姓名不能包含 < 或 >。",
   "error.badEmail": "「{email}」看起来不是邮箱地址。",
   "error.badBranchName": "「{name}」不是有效的分支名。",
-  "error.badRuleId": "「{id}」不能作为规则名。请使用字母、数字、- 和 _（例如 work 或 gitea）。",
+  "error.badRuleId": "「{id}」不能作为规则名。请使用字母、数字、- 和 _，且不要以数字或 - 开头（例如 work 或 gitea）。",
   "error.ruleNeedsIdentity": "规则需要姓名、邮箱地址，或两者都有。",
   "error.badRuleName": "姓名不能为空，也不能包含 <、> 或换行。",
   "error.ruleNeedsWhere": "规则至少需要一个文件夹或服务器。",

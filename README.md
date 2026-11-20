@@ -92,12 +92,20 @@ gitid rule add gitea --name annlee --email ann@gitea.example \
 
 gitid rule list                         # --json for scripts
 gitid rule check gitea ~/code/blog      # does it apply there?
-gitid rule remove work                  # also deletes its identity file
+gitid rule rm work                      # also deletes its identity file
+
+# In a repo (any folder of it): use a rule there too, or stop.
+# A rule's number from `rule list` works as well as its id.
+gitid rule use work
+gitid rule unuse 2
+gitid rule unuse gitea --host gitea.example.com
 ```
 
-`rule add` checks the new rule against real repos (inside `--dir`, plus any `--check` folders) and says where it does and doesn't apply. Running it again with the same id adds to that rule; with `--replace` the rule becomes exactly what you pass (folders, servers, name and email), like editing it in the app. `gitid whoami` labels values that come from a rule.
+`rule add` checks the new rule against real repos (inside `--dir`, plus any `--check` folders) and says where it does and doesn't apply. Running it again with the same id adds to that rule, keeping its name and email unless you pass new ones; with `--replace` the rule becomes exactly what you pass (folders, servers, name and email), like editing it in the app. A new rule's id can't start with a digit, so a number always means a position in `rule list`. `gitid whoami` labels values that come from a rule.
 
-`gitid whoami`, `rule add` and `rule check` exit with **3** when something is wrong (identity missing or guessed, rule not applying), so they can guard scripts or a pre-commit hook.
+`rule use` adds the repo you're in to a rule. git matches rules by where a repo's `.git` folder is, so gitid names the repo's top folder even from a subfolder (and the main repo for a linked worktree); outside a repo, it adds the folder itself, for a folder of repos. `rule unuse` removes that folder again and leaves the rule's other folders, servers and identity file alone. It won't remove a rule's last folder or server: that's what `rule rm` is for. A rule that applies through a parent folder, like `~/work`, can't leave one repo out; `rule unuse` says so and suggests a repo identity (`gitid set user.email ... --repo .`) instead.
+
+`gitid whoami`, `rule add`, `rule use` and `rule check` exit with **3** when something is wrong (identity missing or guessed, rule not applying), so they can guard scripts or a pre-commit hook.
 
 ### Moving rules to another machine
 

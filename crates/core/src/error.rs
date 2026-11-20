@@ -224,7 +224,7 @@ impl fmt::Display for Invalid {
             Invalid::BadBranchName { name } => write!(f, "{name:?} isn't a valid branch name"),
             Invalid::BadRuleId { id } => write!(
                 f,
-                "rule id {id:?} must be letters, digits, '-' or '_' (e.g. work, gitea)"
+                "rule id {id:?} must be letters, digits, '-' or '_', not starting with a digit or '-' (e.g. work, gitea)"
             ),
             Invalid::RuleNeedsIdentity => f.write_str("a rule needs a name, an email, or both"),
             Invalid::BadRuleName => f.write_str("name can't be empty or contain <, > or newlines"),

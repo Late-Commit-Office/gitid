@@ -94,12 +94,20 @@ gitid rule add gitea --name annlee --email ann@gitea.example \
 
 gitid rule list                         # 加 --json 供脚本使用
 gitid rule check gitea ~/code/blog      # 规则在那里生效吗？
-gitid rule remove work                  # 也会删除它的身份文件
+gitid rule rm work                      # 也会删除它的身份文件
+
+# 在仓库中（仓库内任意文件夹）：让一条规则也在这里生效，或者停用它。
+# 既可以用规则的 id，也可以用 `rule list` 中的编号。
+gitid rule use work
+gitid rule unuse 2
+gitid rule unuse gitea --host gitea.example.com
 ```
 
-`rule add` 会用真实的仓库（`--dir` 内的仓库，以及所有 `--check` 文件夹）检查新规则，并说明它在哪里生效、在哪里不生效。用同一个 id 再次运行会向该规则追加内容；加上 `--replace` 则规则会变成您传入的内容（文件夹、服务器、姓名和邮箱），相当于在应用中编辑它。`gitid whoami` 会标出来自规则的值。
+`rule add` 会用真实的仓库（`--dir` 内的仓库，以及所有 `--check` 文件夹）检查新规则，并说明它在哪里生效、在哪里不生效。用同一个 id 再次运行会向该规则追加内容，除非您传入新的姓名和邮箱，否则保留原有的；加上 `--replace` 则规则会变成您传入的内容（文件夹、服务器、姓名和邮箱），相当于在应用中编辑它。新规则的 id 不能以数字开头，所以数字总是指 `rule list` 中的编号。`gitid whoami` 会标出来自规则的值。
 
-`gitid whoami`、`rule add` 和 `rule check` 在出现问题时（身份缺失或被推测、规则不生效）以 **3** 退出，所以可以用来保护脚本或 pre-commit 钩子。
+`rule use` 把您所在的仓库加入一条规则。git 按仓库 `.git` 文件夹的位置匹配规则，所以即使在子文件夹中运行，gitid 也会写入仓库的顶层文件夹（对于链接的工作区，则是主仓库）；不在仓库中时，它会加入该文件夹本身，用于存放多个仓库的文件夹。`rule unuse` 会再次移除该文件夹，规则的其他文件夹、服务器和身份文件保持不变。它不会移除规则的最后一个文件夹或服务器：那是 `rule rm` 的用途。如果规则是通过上层文件夹（例如 `~/work`）生效的，就无法单独排除一个仓库；`rule unuse` 会说明这一点，并建议改用仓库身份（`gitid set user.email ... --repo .`）。
+
+`gitid whoami`、`rule add`、`rule use` 和 `rule check` 在出现问题时（身份缺失或被推测、规则不生效）以 **3** 退出，所以可以用来保护脚本或 pre-commit 钩子。
 
 ### 把规则迁移到另一台机器
 
