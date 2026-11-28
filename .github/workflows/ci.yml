@@ -33,13 +33,11 @@ jobs:
             # The command-only download is static (musl), so it runs on any
             # x86-64 Linux, however old its glibc: servers included.
             targets: x86_64-unknown-linux-musl
-          # Experimental: the command alone, no app. Built and tested on an
-          # ARM runner (free for public repos), static like the x86-64 one.
-          # A failure here shows in the run but doesn't fail CI or a release.
+          # The command alone, no app. Built and tested on an ARM runner
+          # (free for public repos), static like the x86-64 one.
           - os: ubuntu-24.04-arm
             name: linux-arm64
             targets: aarch64-unknown-linux-musl
-            experimental: true
           # Universal: one file for Apple silicon and Intel Macs.
           - os: macos-latest
             name: macos-universal
@@ -47,7 +45,6 @@ jobs:
           - os: windows-latest
             name: windows-x64
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.experimental || false }}
     steps:
       - uses: actions/checkout@v7
       # A composite action (no Node.js runtime).

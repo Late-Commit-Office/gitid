@@ -1,4 +1,4 @@
-> **Note:** This repository is mostly coded by an LLM (Claude), with direction and review by a human.
+> Notice: This repository is mostly coded by an LLM (Claude) with direction by a human. Review it before you rely on it.
 
 <h1><img src="app/src-tauri/icons/128x128.png" alt="" width="64" height="64" align="absmiddle"> gitid</h1>
 
@@ -20,7 +20,7 @@ Download from the [Releases page](https://github.com/Late-Commit-Office/gitid/re
 | `gitid-gui-cli-linux-x64.deb` | The app for Debian and Ubuntu, with the `gitid` command |
 | `gitid-gui-cli-linux-x64.AppImage` | The app for other Linux distributions from 2022 or later (glibc 2.35 or newer, such as Fedora 36+), with the `gitid` command inside |
 | `gitid-cli-<platform>` | The `gitid` command alone, for machines without a desktop (a server). The Linux one is a static build, so it runs on any 64-bit Linux, however old |
-| `gitid-cli-linux-arm64.tar.gz` | **Experimental.** The `gitid` command alone for 64-bit Arm Linux (such as a Raspberry Pi with a 64-bit system, or an Arm server), static like the x86-64 one. Tested less than the others, and left out of a release if it fails to build |
+| `gitid-cli-linux-arm64.tar.gz` | The `gitid` command alone for 64-bit Arm Linux (such as a Raspberry Pi with a 64-bit system, or an Arm server). Static like the x86-64 one, so it runs on any 64-bit Arm Linux |
 
 There's no app for Arm Linux, and nothing for Windows on Arm yet; [build from source](#building-from-source) there. Builds of the latest code, between releases, are under **Artifacts** on a CI run's summary page.
 

@@ -73,17 +73,8 @@ jobs:
           gitid-gui-cli-linux-x64.AppImage
           gitid-cli-macos-universal.tar.gz
           gitid-cli-windows-x64.zip
-          gitid-cli-linux-x64.tar.gz"
-          # Experimental builds: released when they built, never blocking.
-          optional="gitid-cli-linux-arm64.tar.gz"
-          for f in $optional; do
-            if [ -f "$f" ]; then
-              expected="$expected
-          $f"
-            else
-              echo "::warning::$f didn't build, so this release goes out without it. Remove it from release-notes.md."
-            fi
-          done
+          gitid-cli-linux-x64.tar.gz
+          gitid-cli-linux-arm64.tar.gz"
           diff <(echo "$expected" | sed 's/^ *//' | sort) <(ls -1 | sort) || {
             echo "::error::The downloads aren't the expected files (< missing, > unexpected)"
             exit 1

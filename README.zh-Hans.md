@@ -1,4 +1,4 @@
-> **注意：** 本仓库的代码主要由 LLM（Claude）编写，由人类指导和审阅。
+> 注意：本仓库的代码主要由 LLM（Claude）在人类指导下编写。使用前请自行审阅。
 
 <h1><img src="app/src-tauri/icons/128x128.png" alt="" width="64" height="64" align="absmiddle"> gitid</h1>
 
@@ -22,7 +22,7 @@
 | `gitid-gui-cli-linux-x64.deb` | Debian 和 Ubuntu 版应用，含 `gitid` 命令 |
 | `gitid-gui-cli-linux-x64.AppImage` | 2022 年及之后的其他 Linux 发行版（glibc 2.35 或更新，例如 Fedora 36+）的应用，内含 `gitid` 命令 |
 | `gitid-cli-<平台>` | 仅 `gitid` 命令，用于没有桌面的机器（服务器）。Linux 版是静态构建的，可在任何 64 位 Linux 上运行，不论多旧 |
-| `gitid-cli-linux-arm64.tar.gz` | **实验性。** 用于 64 位 Arm Linux（例如运行 64 位系统的树莓派，或 Arm 服务器）的单独 `gitid` 命令，和 x86-64 版一样是静态构建的。测试比其他版本少；如果构建失败，发布中就不包含它 |
+| `gitid-cli-linux-arm64.tar.gz` | 用于 64 位 Arm Linux（例如运行 64 位系统的树莓派，或 Arm 服务器）的单独 `gitid` 命令。和 x86-64 版一样是静态构建的，所以可在任何 64 位 Arm Linux 上运行 |
 
 目前还没有 Arm Linux 版应用，也没有 Windows on Arm 的版本；在这些平台上请[从源代码构建](#从源代码构建)。两次发布之间最新代码的构建，在 CI 运行摘要页面的 **Artifacts** 中。
 
