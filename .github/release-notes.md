@@ -18,6 +18,7 @@ In English and Simplified Chinese.
 | `gitid-gui-cli-linux-x64.deb` | Debian and Ubuntu 22.04 or newer |
 | `gitid-gui-cli-linux-x64.AppImage` | Other Linux distributions from 2022 or later (glibc 2.35 or newer) |
 | `gitid-cli-<platform>` | The `gitid` command alone, for machines without a desktop; the Linux one runs on any 64-bit Linux |
+| `gitid-cli-linux-arm64.tar.gz` | **Experimental:** the `gitid` command alone for 64-bit Arm Linux; no app yet |
 
 Each file's SHA-256 is shown next to it below. You'll also need [git](https://git-scm.com).
 

@@ -20,8 +20,9 @@ Download from the [Releases page](https://github.com/Late-Commit-Office/gitid/re
 | `gitid-gui-cli-linux-x64.deb` | The app for Debian and Ubuntu, with the `gitid` command |
 | `gitid-gui-cli-linux-x64.AppImage` | The app for other Linux distributions from 2022 or later (glibc 2.35 or newer, such as Fedora 36+), with the `gitid` command inside |
 | `gitid-cli-<platform>` | The `gitid` command alone, for machines without a desktop (a server). The Linux one is a static build, so it runs on any 64-bit Linux, however old |
+| `gitid-cli-linux-arm64.tar.gz` | **Experimental.** The `gitid` command alone for 64-bit Arm Linux (such as a Raspberry Pi with a 64-bit system, or an Arm server), static like the x86-64 one. Tested less than the others, and left out of a release if it fails to build |
 
-There's no build for Arm Linux or Windows on Arm yet; [build from source](#building-from-source) there. Builds of the latest code, between releases, are under **Artifacts** on a CI run's summary page.
+There's no app for Arm Linux, and nothing for Windows on Arm yet; [build from source](#building-from-source) there. Builds of the latest code, between releases, are under **Artifacts** on a CI run's summary page.
 
 You'll also need [git](https://git-scm.com) itself. gitid finds it, or you can point it at one in Settings.
 
